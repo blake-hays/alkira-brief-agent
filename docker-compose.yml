@@ -1,0 +1,9 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8501:8501"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ALKIRA_AGENT_ID=${ALKIRA_AGENT_ID}
+      - ALKIRA_ENV_ID=${ALKIRA_ENV_ID}
