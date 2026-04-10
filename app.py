@@ -8,7 +8,6 @@ Usage:
     streamlit run app.py
 """
 
-import io
 import os
 import time
 from dataclasses import dataclass
@@ -48,37 +47,6 @@ def load_config() -> AgentConfig:
     )
 
 
-# ── Docx conversion ────────────────────────────────────────────
-
-def _brief_to_docx(markdown_text: str) -> bytes:
-    """Convert brief markdown to a basic .docx for download."""
-    from docx import Document
-
-    doc = Document()
-    for line in markdown_text.split("\n"):
-        stripped = line.strip()
-        if not stripped or stripped == "---":
-            continue
-        if stripped.startswith("### "):
-            doc.add_heading(stripped[4:], level=3)
-        elif stripped.startswith("## "):
-            doc.add_heading(stripped[3:], level=2)
-        elif stripped.startswith("# "):
-            doc.add_heading(stripped[2:], level=1)
-        elif stripped.startswith("- ") or stripped.startswith("* "):
-            doc.add_paragraph(stripped[2:], style="List Bullet")
-        elif stripped.startswith("|") and not all(c in "|-: " for c in stripped):
-            cells = [c.strip() for c in stripped.split("|")[1:-1]]
-            if cells:
-                doc.add_paragraph("  |  ".join(cells))
-        else:
-            doc.add_paragraph(stripped)
-
-    buf = io.BytesIO()
-    doc.save(buf)
-    return buf.getvalue()
-
-
 # ── Agent Session ────────────────────────────────────────────────
 
 def run_agent_session(
@@ -90,6 +58,7 @@ def run_agent_session(
     """
     Create a managed agent session, send the company name,
     stream events, and return the brief as markdown text.
+    Deletes the session when done to release resources.
     """
     client = Anthropic(api_key=config.api_key)
 
@@ -108,55 +77,63 @@ def run_agent_session(
         title=f"Alkira Brief: {company_name}",
     )
 
-    # Stream agent work
     brief_parts: list[str] = []
-    status_callback(f"Researching {company_name}...")
 
-    session_start = time.monotonic()
+    try:
+        # Stream agent work
+        status_callback(f"Researching {company_name}...")
+        session_start = time.monotonic()
 
-    with client.beta.sessions.events.stream(session.id) as stream:
-        # Send user message after opening the stream (per docs)
-        client.beta.sessions.events.send(
-            session.id,
-            events=[
-                {
-                    "type": "user.message",
-                    "content": [{"type": "text", "text": prompt}],
-                },
-            ],
-        )
+        with client.beta.sessions.events.stream(session.id) as stream:
+            # Send user message after opening the stream (per docs)
+            client.beta.sessions.events.send(
+                session.id,
+                events=[
+                    {
+                        "type": "user.message",
+                        "content": [{"type": "text", "text": prompt}],
+                    },
+                ],
+            )
 
-        for event in stream:
-            if time.monotonic() - session_start > timeout_seconds:
-                raise TimeoutError(
-                    f"Agent did not finish within {timeout_seconds / 60:.0f} minutes"
-                )
+            for event in stream:
+                if time.monotonic() - session_start > timeout_seconds:
+                    raise TimeoutError(
+                        f"Agent did not finish within {timeout_seconds / 60:.0f} minutes"
+                    )
 
-            if not hasattr(event, "type"):
-                continue
+                if not hasattr(event, "type"):
+                    continue
 
-            # Capture text output
-            if event.type == "agent.message":
-                for block in getattr(event, "content", []):
-                    if getattr(block, "type", None) == "text":
-                        brief_parts.append(block.text)
+                # Capture text output
+                if event.type == "agent.message":
+                    for block in getattr(event, "content", []):
+                        if getattr(block, "type", None) == "text":
+                            brief_parts.append(block.text)
 
-            # Surface tool use as status updates
-            if event.type == "agent.tool_use":
-                tool_name = getattr(event, "name", "")
-                if "search" in tool_name:
-                    status_callback(f"Searching the web for {company_name} intel...")
+                # Surface tool use as status updates
+                if event.type == "agent.tool_use":
+                    tool_name = getattr(event, "name", "")
+                    if "search" in tool_name:
+                        status_callback(f"Searching the web for {company_name} intel...")
 
-            # Agent is done
-            if event.type == "session.status_idle":
-                break
+                # Agent is done
+                if event.type == "session.status_idle":
+                    break
 
-            if event.type == "session.error":
-                msg = getattr(getattr(event, "error", None), "message", "unknown")
-                brief_parts.append(f"\n\n[Error: {msg}]")
-                break
+                if event.type == "session.error":
+                    msg = getattr(getattr(event, "error", None), "message", "unknown")
+                    brief_parts.append(f"\n\n[Error: {msg}]")
+                    break
 
-    return "".join(brief_parts)
+        return "".join(brief_parts)
+
+    finally:
+        # Delete session to stop billing and release resources
+        try:
+            client.beta.sessions.delete(session.id)
+        except Exception:
+            pass
 
 
 # ── Streamlit UI ─────────────────────────────────────────────────
@@ -177,14 +154,9 @@ def main() -> None:
         st.markdown("### Recent Briefs")
         if not st.session_state.brief_history:
             st.caption("No briefs generated yet this session.")
-        for i, entry in enumerate(st.session_state.brief_history):
-            st.download_button(
-                label=entry["company"],
-                data=_brief_to_docx(entry["brief_md"]),
-                file_name=entry["filename"],
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                key=f"history_{i}",
-            )
+        for entry in st.session_state.brief_history:
+            with st.expander(entry["company"]):
+                st.markdown(entry["brief_md"])
 
     # ── Custom CSS ───────────────────────────────────────────
     st.markdown("""
@@ -281,25 +253,12 @@ def main() -> None:
             status_placeholder.empty()
 
             st.success(f"Brief generated in {elapsed:.0f} seconds.")
-
-            # ── Display the brief ────────────────────────────
             st.markdown(brief_md)
-
-            # ── Download as .docx ────────────────────────────
-            safe_name = company_name.strip().replace(" ", "_")
-            st.download_button(
-                label=f"Download {safe_name}_Alkira_Brief.docx",
-                data=_brief_to_docx(brief_md),
-                file_name=f"{safe_name}_Alkira_Brief.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                use_container_width=True,
-            )
 
             # Save to history
             st.session_state.brief_history.insert(0, {
                 "company": company_name.strip(),
                 "brief_md": brief_md,
-                "filename": f"{safe_name}_Alkira_Brief.docx",
             })
             st.session_state.brief_history = st.session_state.brief_history[:5]
 
@@ -316,7 +275,7 @@ def main() -> None:
     elif generate:
         st.warning("Enter a company name first.")
 
-    # ── How it works ───────────────────────────��─────────────
+    # ── How it works ─────────────────────────────────────────
     with st.expander("How it works"):
         st.markdown(
             "This tool uses an AI agent to research a company and generate a "
@@ -325,10 +284,9 @@ def main() -> None:
             "meeting with.\n"
             "2. **The agent researches it** — searching the web for recent "
             "news, IT leadership, cloud strategy, and network infrastructure.\n"
-            "3. **You get a brief** — displayed on the page with a .docx "
-            "download option. The brief maps what the agent found to "
-            "Alkira's entry points, with proof points and a suggested next "
-            "step.\n\n"
+            "3. **You get a brief** — displayed on the page, mapping what "
+            "the agent found to Alkira's entry points, with proof points "
+            "and a suggested next step.\n\n"
             "Briefs typically take 1-2 minutes to generate."
         )
 

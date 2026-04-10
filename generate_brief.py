@@ -59,47 +59,55 @@ def generate_brief(company_name: str, output_path: str = None, verbose: bool = F
     start = time.time()
     timeout_seconds = 300  # 5 minutes
 
-    with client.beta.sessions.events.stream(session.id) as stream:
-        # Send user message after opening the stream (per docs)
-        client.beta.sessions.events.send(
-            session.id,
-            events=[
-                {
-                    "type": "user.message",
-                    "content": [{"type": "text", "text": prompt}],
-                },
-            ],
-        )
+    try:
+        with client.beta.sessions.events.stream(session.id) as stream:
+            # Send user message after opening the stream (per docs)
+            client.beta.sessions.events.send(
+                session.id,
+                events=[
+                    {
+                        "type": "user.message",
+                        "content": [{"type": "text", "text": prompt}],
+                    },
+                ],
+            )
 
-        for event in stream:
-            if time.time() - start > timeout_seconds:
-                print("\nTimed out after 5 minutes.")
-                break
+            for event in stream:
+                if time.time() - start > timeout_seconds:
+                    print("\nTimed out after 5 minutes.")
+                    break
 
-            if not hasattr(event, "type"):
-                continue
+                if not hasattr(event, "type"):
+                    continue
 
-            # Capture agent text
-            if event.type == "agent.message":
-                for block in getattr(event, "content", []):
-                    if getattr(block, "type", None) == "text":
-                        text_parts.append(block.text)
-                        if verbose:
-                            print(block.text, end="", flush=True)
+                # Capture agent text
+                if event.type == "agent.message":
+                    for block in getattr(event, "content", []):
+                        if getattr(block, "type", None) == "text":
+                            text_parts.append(block.text)
+                            if verbose:
+                                print(block.text, end="", flush=True)
 
-            # Track tool use for status updates
-            if event.type == "agent.tool_use":
-                tool_name = getattr(event, "name", "unknown")
-                if "search" in tool_name:
-                    print("  [searching the web...]")
+                # Track tool use for status updates
+                if event.type == "agent.tool_use":
+                    tool_name = getattr(event, "name", "unknown")
+                    if "search" in tool_name:
+                        print("  [searching the web...]")
 
-            if event.type == "session.status_idle":
-                break
+                if event.type == "session.status_idle":
+                    break
 
-            if event.type == "session.error":
-                msg = getattr(getattr(event, "error", None), "message", "unknown")
-                print(f"\n[Error: {msg}]")
-                break
+                if event.type == "session.error":
+                    msg = getattr(getattr(event, "error", None), "message", "unknown")
+                    print(f"\n[Error: {msg}]")
+                    break
+
+    finally:
+        # Delete session to stop billing and release resources
+        try:
+            client.beta.sessions.delete(session.id)
+        except Exception:
+            pass
 
     elapsed = time.time() - start
     print(f"\nCompleted in {elapsed:.0f} seconds.")
