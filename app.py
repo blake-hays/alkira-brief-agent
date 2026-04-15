@@ -904,15 +904,16 @@ def main() -> None:
         return
 
     # ── Search bar ───────────────────────────────────────────
-    col1, col2 = st.columns([5, 1])
-    with col1:
-        company_name = st.text_input(
-            "Company",
-            placeholder="Enter a company name...",
-            label_visibility="collapsed",
-        )
-    with col2:
-        generate = st.button("Generate", use_container_width=True)
+    with st.form("brief_form", clear_on_submit=False, border=False):
+        col1, col2 = st.columns([5, 1])
+        with col1:
+            company_name = st.text_input(
+                "Company",
+                placeholder="Enter a company name...",
+                label_visibility="collapsed",
+            )
+        with col2:
+            generate = st.form_submit_button("Generate", use_container_width=True)
 
     # ── Generation ───────────────────────────────────────────
     if generate and company_name.strip():
