@@ -336,6 +336,7 @@ CUSTOM_CSS = """
     }
     .stDeployButton, #MainMenu, footer,
     header[data-testid="stHeader"] { display: none !important; }
+    .stSpinner, div[data-testid="stSpinner"] { display: none !important; }
 
     .block-container {
         padding-top: 2rem !important;
