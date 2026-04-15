@@ -224,71 +224,96 @@ def get_brief_body(brief: str) -> str:
 # ── HTML Rendering ───────────────────────────────────────────────
 
 def md_to_html(md: str) -> str:
-    """Convert brief markdown to styled HTML."""
+    """Convert brief markdown to styled HTML with consistent visual treatment."""
     lines = md.split("\n")
     out: list[str] = []
     in_ul = False
     in_ol = False
 
+    def close_lists():
+        nonlocal in_ul, in_ol
+        if in_ul:
+            out.append("</ul>")
+            in_ul = False
+        if in_ol:
+            out.append("</ol>")
+            in_ol = False
+
     for line in lines:
         stripped = line.strip()
 
+        # Close lists if current line isn't a list item
         if in_ul and not stripped.startswith("- ") and not stripped.startswith("* "):
-            out.append("</ul>")
-            in_ul = False
+            close_lists()
         if in_ol and not re.match(r"^\d+\.\s", stripped):
-            out.append("</ol>")
-            in_ol = False
+            close_lists()
 
         if not stripped:
             continue
 
-        # Section headings get special treatment
+        # ── H3 = section card with blue accent ───────
         if stripped.startswith("### "):
+            close_lists()
             title = stripped[4:]
             out.append(
-                f'<div class="section-head">'
-                f'<div class="section-accent"></div>'
+                f'<div class="sec">'
+                f'<div class="sec-bar"></div>'
                 f'<h3>{inline(title)}</h3>'
                 f'</div>'
             )
             continue
+
+        # ── H2 ───────────────────────────────────────
         if stripped.startswith("## "):
+            close_lists()
             out.append(f"<h2>{inline(stripped[3:])}</h2>")
             continue
+
+        # ── Skip H1 (rendered separately) ────────────
         if stripped.startswith("# "):
-            continue  # Skip H1, rendered separately
+            continue
 
+        # ── Skip HRs ─────────────────────────────────
         if stripped in ("---", "***", "___"):
-            continue  # Skip HRs, we use section borders
+            continue
 
+        # ── Bold entry point heading (e.g. **1. Multi-Cloud Networking**) ──
+        ep_match = re.match(r"^\*\*(\d+\..+?)\*\*\s*$", stripped)
+        if ep_match:
+            close_lists()
+            out.append(
+                f'<div class="entry-point-head">'
+                f'{inline(stripped)}'
+                f'</div>'
+            )
+            continue
+
+        # ── Bullet items ─────────────────────────────
         if stripped.startswith("- ") or stripped.startswith("* "):
             content = stripped[2:]
-            # Detect sub-heading bullets like "**Confidence level:** ..." or "**What we know (confirmed):**"
-            sub_match = re.match(r"\*\*(.+?):?\*\*:?\s*(.*)", content)
-            if sub_match and len(sub_match.group(1)) > 8 and (
-                sub_match.group(1)[0].isupper()
-            ):
-                # Close any open list before the sub-heading
-                if in_ul:
-                    out.append("</ul>")
-                    in_ul = False
-                label = sub_match.group(1).rstrip(":")
-                rest = sub_match.group(2).strip()
+
+            # Bold-label bullet: **Label:** content
+            label_match = re.match(r"\*\*(.+?):?\*\*:?\s*(.*)", content)
+            if label_match:
+                label = label_match.group(1).rstrip(":")
+                rest = label_match.group(2).strip()
+                if not in_ul:
+                    out.append('<ul class="brief-list">')
+                    in_ul = True
+                rest_html = f' {inline(rest)}' if rest else ""
                 out.append(
-                    f'<div class="sub-heading">'
-                    f'<span class="sub-label">{label}</span>'
+                    f'<li><span class="label">{label}:</span>{rest_html}</li>'
                 )
-                if rest:
-                    out.append(f'<span class="sub-inline">{inline(rest)}</span>')
-                out.append("</div>")
                 continue
+
+            # Regular bullet
             if not in_ul:
                 out.append('<ul class="brief-list">')
                 in_ul = True
             out.append(f"<li>{inline(content)}</li>")
             continue
 
+        # ── Ordered list ─────────────────────────────
         ol_match = re.match(r"^(\d+)\.\s(.+)", stripped)
         if ol_match:
             if not in_ol:
@@ -297,20 +322,26 @@ def md_to_html(md: str) -> str:
             out.append(f"<li>{inline(ol_match.group(2))}</li>")
             continue
 
-        # CONFIDENTIAL footer
+        # ── CONFIDENTIAL ─────────────────────────────
         if "CONFIDENTIAL" in stripped.upper():
+            close_lists()
+            out.append('<p class="confidential">CONFIDENTIAL</p>')
+            continue
+
+        # ── Paragraph (bold-label line without bullet) ──
+        label_p = re.match(r"^\*\*(.+?):?\*\*:?\s+(.+)", stripped)
+        if label_p:
+            close_lists()
+            label = label_p.group(1).rstrip(":")
+            rest = label_p.group(2)
             out.append(
-                '<p class="confidential">CONFIDENTIAL</p>'
+                f'<p><span class="label">{label}:</span> {inline(rest)}</p>'
             )
             continue
 
         out.append(f"<p>{inline(stripped)}</p>")
 
-    if in_ul:
-        out.append("</ul>")
-    if in_ol:
-        out.append("</ol>")
-
+    close_lists()
     return "\n".join(out)
 
 
@@ -635,52 +666,79 @@ CUSTOM_CSS = """
         color: #152a4e;
         margin: 1.2rem 0 0.4rem;
     }
-    .brief-doc .section-head {
+
+    /* Section headings — blue accent bar */
+    .brief-doc .sec {
         display: flex;
         align-items: center;
-        gap: 0.6rem;
-        margin-top: 1.6rem;
-        margin-bottom: 0.6rem;
-        padding-bottom: 0.35rem;
+        gap: 0.55rem;
+        margin-top: 1.5rem;
+        margin-bottom: 0.55rem;
+        padding-bottom: 0.3rem;
         border-bottom: 1px solid #edf0f4;
     }
-    .brief-doc .section-accent {
+    .brief-doc .sec-bar {
         width: 3px;
-        height: 18px;
+        height: 16px;
         background: #2563eb;
         border-radius: 2px;
         flex-shrink: 0;
     }
-    .brief-doc .section-head h3 {
-        font-size: 0.82rem;
+    .brief-doc .sec h3 {
+        font-size: 0.78rem;
         font-weight: 700;
         color: #1a3a6b;
         margin: 0;
         text-transform: uppercase;
         letter-spacing: 0.04em;
     }
+
+    /* Entry point headings (bold numbered like **1. Multi-Cloud**) */
+    .brief-doc .entry-point-head {
+        margin-top: 1rem;
+        margin-bottom: 0.35rem;
+        padding: 0.5rem 0.7rem;
+        background: #f8fafc;
+        border-left: 3px solid #1a3a6b;
+        border-radius: 0 6px 6px 0;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #152a4e;
+    }
+
+    /* Paragraphs */
     .brief-doc p {
         font-size: 0.82rem;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.45rem;
     }
+
+    /* Lists */
     .brief-doc .brief-list {
         font-size: 0.82rem;
         padding-left: 1.1rem;
-        margin: 0.3rem 0 0.6rem;
+        margin: 0.25rem 0 0.5rem;
     }
     .brief-doc .brief-list li {
         margin-bottom: 0.3rem;
         line-height: 1.5;
     }
     .brief-doc .brief-list li::marker {
-        color: #2563eb;
+        color: #94a3b8;
     }
+
+    /* Bold labels (uniform treatment everywhere) */
+    .brief-doc .label {
+        font-size: 0.72rem;
+        font-weight: 700;
+        color: #1a3a6b;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+
+    /* Inline styling */
     .brief-doc strong { color: #0f172a; }
     .brief-doc em { color: #64748b; font-style: italic; }
-    .brief-doc a {
-        color: #2563eb;
-        text-decoration: none;
-    }
+    .brief-doc a { color: #2563eb; text-decoration: none; }
     .brief-doc a:hover { text-decoration: underline; }
     .brief-doc code {
         background: #f1f5f9;
@@ -688,29 +746,7 @@ CUSTOM_CSS = """
         border-radius: 3px;
         font-size: 0.78rem;
     }
-    .brief-doc .sub-heading {
-        margin-top: 0.9rem;
-        margin-bottom: 0.25rem;
-        padding: 0.45rem 0.65rem;
-        background: #f4f6f9;
-        border-radius: 6px;
-        border-left: 3px solid #cbd5e1;
-    }
-    .brief-doc .sub-label {
-        font-size: 0.75rem;
-        font-weight: 700;
-        color: #334155;
-        text-transform: uppercase;
-        letter-spacing: 0.03em;
-        display: block;
-    }
-    .brief-doc .sub-inline {
-        font-size: 0.78rem;
-        color: #475569;
-        display: block;
-        margin-top: 0.15rem;
-        line-height: 1.45;
-    }
+
     .brief-doc .confidential {
         text-align: center;
         font-size: 0.7rem;
