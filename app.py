@@ -255,10 +255,30 @@ def md_to_html(md: str) -> str:
             continue  # Skip HRs, we use section borders
 
         if stripped.startswith("- ") or stripped.startswith("* "):
+            content = stripped[2:]
+            # Detect sub-heading bullets like "**Confidence level:** ..." or "**What we know (confirmed):**"
+            sub_match = re.match(r"\*\*(.+?):?\*\*:?\s*(.*)", content)
+            if sub_match and len(sub_match.group(1)) > 8 and (
+                sub_match.group(1)[0].isupper()
+            ):
+                # Close any open list before the sub-heading
+                if in_ul:
+                    out.append("</ul>")
+                    in_ul = False
+                label = sub_match.group(1).rstrip(":")
+                rest = sub_match.group(2).strip()
+                out.append(
+                    f'<div class="sub-heading">'
+                    f'<span class="sub-label">{label}</span>'
+                )
+                if rest:
+                    out.append(f'<span class="sub-inline">{inline(rest)}</span>')
+                out.append("</div>")
+                continue
             if not in_ul:
                 out.append('<ul class="brief-list">')
                 in_ul = True
-            out.append(f"<li>{inline(stripped[2:])}</li>")
+            out.append(f"<li>{inline(content)}</li>")
             continue
 
         ol_match = re.match(r"^(\d+)\.\s(.+)", stripped)
@@ -650,6 +670,29 @@ CUSTOM_CSS = """
         padding: 0.1rem 0.3rem;
         border-radius: 3px;
         font-size: 0.78rem;
+    }
+    .brief-doc .sub-heading {
+        margin-top: 0.9rem;
+        margin-bottom: 0.25rem;
+        padding: 0.45rem 0.65rem;
+        background: #f4f6f9;
+        border-radius: 6px;
+        border-left: 3px solid #cbd5e1;
+    }
+    .brief-doc .sub-label {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #334155;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        display: block;
+    }
+    .brief-doc .sub-inline {
+        font-size: 0.78rem;
+        color: #475569;
+        display: block;
+        margin-top: 0.15rem;
+        line-height: 1.45;
     }
     .brief-doc .confidential {
         text-align: center;
