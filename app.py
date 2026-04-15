@@ -164,18 +164,26 @@ def extract_company_header(brief: str) -> tuple[str, str]:
     """Extract company name and stats line from the brief."""
     lines = brief.split("\n")
     company = ""
-    stats = ""
+    stats_lines = []
+    capturing_stats = False
     for line in lines:
         stripped = line.strip()
         if stripped.startswith("## ") and "OPPORTUNITY" not in stripped.upper():
             company = stripped.lstrip("# ").strip()
+            capturing_stats = True
             continue
-        if company and stripped.startswith("**") and (
-            "HQ" in stripped or "Revenue" in stripped or "Industry" in stripped
-        ):
-            stats = stripped
+        if capturing_stats and stripped:
+            # Stop at score line, next heading, or blank after stats
+            if "Alkira Fit Score" in stripped or stripped.startswith("#"):
+                break
+            stats_lines.append(stripped)
+        elif capturing_stats and not stripped and stats_lines:
             break
-    return company, stats
+
+    raw_stats = " ".join(stats_lines)
+    # Strip all markdown bold markers
+    clean_stats = raw_stats.replace("**", "")
+    return company, clean_stats
 
 
 def extract_section(brief: str, heading: str) -> str:
