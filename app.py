@@ -422,21 +422,29 @@ CUSTOM_CSS = """
     }
 
     /* ── Buttons ──────────────────────────────────── */
-    .stButton > button {
-        background: #1a3a6b;
+    .stButton > button,
+    .stFormSubmitButton > button,
+    button[kind="formSubmit"] {
+        background: #1a3a6b !important;
         color: white !important;
-        border: none;
-        padding: 0.6rem 1.6rem;
-        font-size: 0.82rem;
-        font-weight: 700;
-        border-radius: 9px;
-        width: 100%;
+        border: none !important;
+        padding: 0.6rem 1.6rem !important;
+        font-size: 0.82rem !important;
+        font-weight: 700 !important;
+        border-radius: 9px !important;
+        width: 100% !important;
         transition: all 0.15s ease;
         letter-spacing: 0.01em;
     }
-    .stButton > button:hover {
-        background: #244d8a;
+    .stButton > button:hover,
+    .stFormSubmitButton > button:hover,
+    button[kind="formSubmit"]:hover {
+        background: #244d8a !important;
         box-shadow: 0 3px 10px rgba(26,58,107,0.25);
+    }
+    /* Hide "Press Enter to submit form" hint */
+    .stForm [data-testid="InputInstructions"] {
+        display: none !important;
     }
     .stDownloadButton > button {
         background: #fff !important;
@@ -904,19 +912,22 @@ def main() -> None:
         return
 
     # ── Search bar ───────────────────────────────────────────
-    with st.form("brief_form", clear_on_submit=False, border=False):
-        col1, col2 = st.columns([5, 1])
-        with col1:
-            company_name = st.text_input(
-                "Company",
-                placeholder="Enter a company name...",
-                label_visibility="collapsed",
-            )
-        with col2:
-            generate = st.form_submit_button("Generate", use_container_width=True)
+    form_area = st.empty()
+    with form_area.container():
+        with st.form("brief_form", clear_on_submit=False, border=False):
+            col1, col2 = st.columns([5, 1])
+            with col1:
+                company_name = st.text_input(
+                    "Company",
+                    placeholder="Enter a company name...",
+                    label_visibility="collapsed",
+                )
+            with col2:
+                generate = st.form_submit_button("Generate", use_container_width=True)
 
     # ── Generation ───────────────────────────────────────────
     if generate and company_name.strip():
+        form_area.empty()  # Hide form while generating
         tracker_ph = st.empty()
         current_phase = {"value": "init"}
 
