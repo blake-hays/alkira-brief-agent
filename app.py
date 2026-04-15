@@ -30,7 +30,6 @@ class AgentConfig:
 
 
 def _secret(key: str) -> str:
-    """Read from env vars first, then st.secrets (for Streamlit Community Cloud)."""
     val = os.environ.get(key, "")
     if not val:
         try:
@@ -56,11 +55,6 @@ def run_agent_session(
     status_callback,
     timeout_seconds: float = 300,
 ) -> str:
-    """
-    Create a managed agent session, send the company name,
-    stream events, and return the brief as markdown text.
-    Deletes the session when done to release resources.
-    """
     client = Anthropic(api_key=config.api_key)
 
     prompt = (
@@ -71,7 +65,7 @@ def run_agent_session(
         f"Return the brief as markdown text. Do not narrate your process."
     )
 
-    status_callback("Starting agent session...", "init")
+    status_callback("init")
     session = client.beta.sessions.create(
         agent=config.agent_id,
         environment_id=config.env_id,
@@ -81,7 +75,7 @@ def run_agent_session(
     brief_parts: list[str] = []
 
     try:
-        status_callback(f"Researching {company_name}...", "research")
+        status_callback("research")
         session_start = time.monotonic()
 
         with client.beta.sessions.events.stream(session.id) as stream:
@@ -97,9 +91,7 @@ def run_agent_session(
 
             for event in stream:
                 if time.monotonic() - session_start > timeout_seconds:
-                    raise TimeoutError(
-                        f"Agent did not finish within {timeout_seconds / 60:.0f} minutes"
-                    )
+                    raise TimeoutError("Agent did not finish in time")
 
                 if not hasattr(event, "type"):
                     continue
@@ -112,17 +104,12 @@ def run_agent_session(
                 if event.type == "agent.tool_use":
                     tool_name = getattr(event, "name", "")
                     if "search" in tool_name:
-                        status_callback(
-                            f"Searching the web for {company_name} intel...",
-                            "search",
-                        )
+                        status_callback("search")
                     elif "skill" in tool_name or "read" in tool_name:
-                        status_callback(
-                            "Analyzing Alkira knowledge base...",
-                            "analyze",
-                        )
+                        status_callback("analyze")
 
                 if event.type == "session.status_idle":
+                    status_callback("done")
                     break
 
                 if event.type == "session.error":
@@ -144,11 +131,7 @@ def run_agent_session(
 # ── Brief Parsing ────────────────────────────────────────────────
 
 def clean_brief(raw: str) -> str:
-    """Strip agent narration before the actual brief starts."""
-    markers = [
-        "# ALKIRA OPPORTUNITY BRIEF",
-        "ALKIRA OPPORTUNITY BRIEF",
-    ]
+    markers = ["# ALKIRA OPPORTUNITY BRIEF", "ALKIRA OPPORTUNITY BRIEF"]
     for marker in markers:
         idx = raw.find(marker)
         if idx != -1:
@@ -157,17 +140,11 @@ def clean_brief(raw: str) -> str:
 
 
 def extract_score(brief: str) -> tuple[int, str]:
-    """Pull the fit score and reasoning from the brief. Returns (score, reasoning)."""
-    match = re.search(
-        r"\*?\*?Alkira Fit Score:\s*(\d)\s*/\s*5\*?\*?",
-        brief,
-    )
+    match = re.search(r"\*?\*?Alkira Fit Score:\s*(\d)\s*/\s*5\*?\*?", brief)
     score = int(match.group(1)) if match else 0
-
     reasoning = ""
     if match:
-        after = brief[match.end():]
-        after = after.lstrip("* \n")
+        after = brief[match.end():].lstrip("* \n")
         lines = after.split("\n")
         reason_lines = []
         for line in lines:
@@ -180,12 +157,28 @@ def extract_score(brief: str) -> tuple[int, str]:
                 break
             reason_lines.append(stripped)
         reasoning = " ".join(reason_lines)
-
     return score, reasoning
 
 
+def extract_company_header(brief: str) -> tuple[str, str]:
+    """Extract company name and stats line from the brief."""
+    lines = brief.split("\n")
+    company = ""
+    stats = ""
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("## ") and "OPPORTUNITY" not in stripped.upper():
+            company = stripped.lstrip("# ").strip()
+            continue
+        if company and stripped.startswith("**") and (
+            "HQ" in stripped or "Revenue" in stripped or "Industry" in stripped
+        ):
+            stats = stripped
+            break
+    return company, stats
+
+
 def extract_section(brief: str, heading: str) -> str:
-    """Extract content under a specific H3 heading."""
     pattern = rf"###?\s*{re.escape(heading)}\s*\n"
     match = re.search(pattern, brief, re.IGNORECASE)
     if not match:
@@ -196,327 +189,34 @@ def extract_section(brief: str, heading: str) -> str:
     return brief[start:end].strip()
 
 
-# ── Custom CSS ───────────────────────────────────────────────────
-
-CUSTOM_CSS = """
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
-    .stApp { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
-    .stDeployButton, #MainMenu, footer { display: none !important; visibility: hidden !important; }
-
-    /* ── Hero ────────────────────────────────────── */
-    .hero {
-        background: linear-gradient(135deg, #0a1628 0%, #1a365d 50%, #234e7e 100%);
-        border-radius: 16px;
-        padding: 2rem 2rem 1.8rem;
-        margin-bottom: 1.5rem;
-        position: relative;
-        overflow: hidden;
-    }
-    .hero::after {
-        content: '';
-        position: absolute;
-        top: -40%;
-        right: -15%;
-        width: 350px;
-        height: 350px;
-        background: radial-gradient(circle, rgba(56, 189, 248, 0.06) 0%, transparent 70%);
-        pointer-events: none;
-    }
-    .hero-badge {
-        display: inline-block;
-        background: rgba(56, 189, 248, 0.15);
-        color: #7dd3fc;
-        font-size: 0.65rem;
-        font-weight: 600;
-        padding: 0.2rem 0.55rem;
-        border-radius: 20px;
-        margin-bottom: 0.6rem;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-    }
-    .hero h2 {
-        font-size: 1.6rem;
-        font-weight: 800;
-        color: #fff;
-        margin: 0 0 0.3rem;
-        letter-spacing: -0.02em;
-        line-height: 1.2;
-    }
-    .hero p {
-        font-size: 0.88rem;
-        color: rgba(255,255,255,0.6);
-        margin: 0;
-        line-height: 1.45;
-        max-width: 500px;
-    }
-
-    /* ── Buttons ──────────────────────────────────── */
-    .stButton > button {
-        background: linear-gradient(135deg, #1a365d 0%, #2563eb 100%);
-        color: white !important;
-        border: none;
-        padding: 0.65rem 1.5rem;
-        font-size: 0.88rem;
-        font-weight: 600;
-        border-radius: 10px;
-        width: 100%;
-        transition: all 0.2s ease;
-    }
-    .stButton > button:hover {
-        background: linear-gradient(135deg, #1e3a5f 0%, #3b82f6 100%);
-        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
-        transform: translateY(-1px);
-    }
-    .stDownloadButton > button {
-        background: linear-gradient(135deg, #065f46 0%, #059669 100%) !important;
-        color: white !important;
-        border: none !important;
-        font-weight: 600 !important;
-        border-radius: 8px !important;
-    }
-    .stDownloadButton > button:hover {
-        box-shadow: 0 4px 12px rgba(5, 150, 105, 0.25) !important;
-    }
-
-    /* ── Status ───────────────────────────────────── */
-    .status-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        background: #f0f9ff;
-        border: 1px solid #bae6fd;
-        color: #0369a1;
-        padding: 0.55rem 1rem;
-        border-radius: 10px;
-        font-size: 0.82rem;
-        font-weight: 500;
-        margin: 0.4rem 0;
-        width: 100%;
-    }
-    .status-dot {
-        width: 7px; height: 7px;
-        background: #0ea5e9;
-        border-radius: 50%;
-        animation: pulse 1.4s ease-in-out infinite;
-    }
-    @keyframes pulse {
-        0%, 100% { opacity: 1; transform: scale(1); }
-        50% { opacity: 0.4; transform: scale(0.75); }
-    }
-
-    /* ── Score card ───────────────────────────────── */
-    .score-card {
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 1.25rem 1.5rem;
-        margin-bottom: 1rem;
-    }
-    .score-label {
-        font-size: 0.7rem;
-        font-weight: 700;
-        color: #94a3b8;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        margin: 0 0 0.4rem;
-    }
-    .score-stars {
-        font-size: 1.6rem;
-        letter-spacing: 2px;
-        margin: 0 0 0.4rem;
-        line-height: 1;
-    }
-    .score-reason {
-        font-size: 0.82rem;
-        color: #475569;
-        line-height: 1.5;
-        margin: 0;
-    }
-    .star-filled { color: #f59e0b; }
-    .star-empty { color: #e2e8f0; }
-
-    /* ── Brief container ──────────────────────────── */
-    .brief-wrap {
-        background: #fff;
-        border: 1px solid #e2e8f0;
-        border-radius: 14px;
-        padding: 2rem 2.25rem;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-        line-height: 1.65;
-        color: #1e293b;
-    }
-    .brief-wrap h1 {
-        font-size: 1.3rem;
-        font-weight: 800;
-        color: #0f172a;
-        border-bottom: 2px solid #1a365d;
-        padding-bottom: 0.5rem;
-        margin-bottom: 0.3rem;
-        letter-spacing: -0.01em;
-    }
-    .brief-wrap h2 {
-        font-size: 1.15rem;
-        font-weight: 700;
-        color: #1a365d;
-        margin-top: 0.4rem;
-        margin-bottom: 0.3rem;
-    }
-    .brief-wrap h3 {
-        font-size: 0.95rem;
-        font-weight: 700;
-        color: #1e40af;
-        margin-top: 1.5rem;
-        margin-bottom: 0.5rem;
-        padding-bottom: 0.25rem;
-        border-bottom: 1px solid #e2e8f0;
-    }
-    .brief-wrap p {
-        font-size: 0.87rem;
-        margin-bottom: 0.6rem;
-    }
-    .brief-wrap ul, .brief-wrap ol {
-        font-size: 0.87rem;
-        padding-left: 1.2rem;
-        margin-bottom: 0.7rem;
-    }
-    .brief-wrap li {
-        margin-bottom: 0.35rem;
-        line-height: 1.55;
-    }
-    .brief-wrap strong { color: #0f172a; }
-    .brief-wrap em { color: #64748b; }
-    .brief-wrap a {
-        color: #2563eb;
-        text-decoration: none;
-        border-bottom: 1px solid #93c5fd;
-    }
-    .brief-wrap a:hover { border-bottom-color: #2563eb; }
-    .brief-wrap table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.82rem;
-        margin: 0.6rem 0;
-    }
-    .brief-wrap th {
-        background: #f1f5f9;
-        padding: 0.5rem 0.75rem;
-        text-align: left;
-        font-weight: 600;
-        border-bottom: 2px solid #e2e8f0;
-    }
-    .brief-wrap td {
-        padding: 0.4rem 0.75rem;
-        border-bottom: 1px solid #f1f5f9;
-    }
-    .brief-wrap hr {
-        border: none;
-        border-top: 1px solid #e2e8f0;
-        margin: 1.25rem 0;
-    }
-    .brief-wrap blockquote {
-        border-left: 3px solid #2563eb;
-        padding-left: 1rem;
-        color: #475569;
-        margin: 0.6rem 0;
-    }
-
-    /* ── Sidebar ──────────────────────────────────── */
-    [data-testid="stSidebar"] { background: #f8fafc; }
-    .sidebar-title {
-        font-size: 0.7rem;
-        font-weight: 700;
-        color: #94a3b8;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        margin-bottom: 0.75rem;
-        padding-bottom: 0.4rem;
-        border-bottom: 1px solid #e2e8f0;
-    }
-
-    /* ── Tab styling ──────────────────────────────── */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 0;
-        background: #f1f5f9;
-        border-radius: 10px;
-        padding: 3px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        font-size: 0.8rem;
-        font-weight: 600;
-        padding: 0.5rem 1rem;
-        border-radius: 8px;
-        color: #64748b;
-    }
-    .stTabs [aria-selected="true"] {
-        background: #fff !important;
-        color: #1a365d !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    }
-
-    /* ── Meta bar ─────────────────────────────────── */
-    .meta-bar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.5rem 0;
-        margin-bottom: 0.75rem;
-        border-bottom: 1px solid #e2e8f0;
-    }
-    .meta-label {
-        font-size: 0.7rem;
-        font-weight: 600;
-        color: #94a3b8;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-    }
-    .meta-time {
-        font-size: 0.7rem;
-        color: #94a3b8;
-    }
-</style>
-"""
+def get_brief_body(brief: str) -> str:
+    """Get the brief content starting from Executive Summary onward,
+    excluding the title, company header, and score (rendered separately)."""
+    markers = [
+        "### Executive Summary",
+        "## Executive Summary",
+        "### Infrastructure Snapshot",
+        "### Company Snapshot",
+        "### Cloud & Infrastructure",
+    ]
+    for marker in markers:
+        idx = brief.find(marker)
+        if idx != -1:
+            # Find the CONFIDENTIAL marker or end
+            end_markers = ["*CONFIDENTIAL*", "*\"CONFIDENTIAL\"*", "CONFIDENTIAL"]
+            end_idx = len(brief)
+            for em in end_markers:
+                ei = brief.find(em, idx)
+                if ei != -1:
+                    end_idx = min(end_idx, ei + len(em))
+            return brief[idx:end_idx].strip()
+    return brief
 
 
-# ── Render helpers ───────────────────────────────────────────────
+# ── HTML Rendering ───────────────────────────────────────────────
 
-def render_score_card(score: int, reasoning: str) -> None:
-    """Render the Alkira Fit Score as a visual card."""
-    filled = "".join(
-        f'<span class="star-filled">&#9733;</span>' for _ in range(score)
-    )
-    empty = "".join(
-        f'<span class="star-empty">&#9733;</span>' for _ in range(5 - score)
-    )
-
-    color_map = {5: "#059669", 4: "#0d9488", 3: "#64748b", 2: "#94a3b8", 1: "#cbd5e1"}
-    border_color = color_map.get(score, "#94a3b8")
-
-    st.markdown(
-        f'<div class="score-card" style="border-left: 4px solid {border_color};">'
-        f'<p class="score-label">Alkira Fit Score</p>'
-        f'<p class="score-stars">{filled}{empty}</p>'
-        f'<p class="score-reason">{reasoning}</p>'
-        f"</div>",
-        unsafe_allow_html=True,
-    )
-
-
-def render_brief(brief_md: str) -> None:
-    """Render the brief markdown inside a styled container."""
-    st.markdown(
-        f'<div class="brief-wrap">{_md_to_html_simple(brief_md)}</div>',
-        unsafe_allow_html=True,
-    )
-
-
-def _md_to_html_simple(md: str) -> str:
-    """Minimal markdown to HTML for rendering inside styled container.
-    Streamlit's st.markdown handles most things, but we need raw HTML
-    inside our div, so we do a lightweight conversion."""
-    import html as html_lib
-
+def md_to_html(md: str) -> str:
+    """Convert brief markdown to styled HTML."""
     lines = md.split("\n")
     out: list[str] = []
     in_ul = False
@@ -525,7 +225,6 @@ def _md_to_html_simple(md: str) -> str:
     for line in lines:
         stripped = line.strip()
 
-        # Close open lists if needed
         if in_ul and not stripped.startswith("- ") and not stripped.startswith("* "):
             out.append("</ul>")
             in_ul = False
@@ -533,49 +232,52 @@ def _md_to_html_simple(md: str) -> str:
             out.append("</ol>")
             in_ol = False
 
-        # Blank line
         if not stripped:
-            out.append("")
             continue
 
-        # Headings
-        if stripped.startswith("# "):
-            out.append(f"<h1>{_inline(stripped[2:])}</h1>")
+        # Section headings get special treatment
+        if stripped.startswith("### "):
+            title = stripped[4:]
+            out.append(
+                f'<div class="section-head">'
+                f'<div class="section-accent"></div>'
+                f'<h3>{inline(title)}</h3>'
+                f'</div>'
+            )
             continue
         if stripped.startswith("## "):
-            out.append(f"<h2>{_inline(stripped[3:])}</h2>")
+            out.append(f"<h2>{inline(stripped[3:])}</h2>")
             continue
-        if stripped.startswith("### "):
-            out.append(f"<h3>{_inline(stripped[4:])}</h3>")
-            continue
+        if stripped.startswith("# "):
+            continue  # Skip H1, rendered separately
 
-        # Horizontal rule
         if stripped in ("---", "***", "___"):
-            out.append("<hr/>")
-            continue
+            continue  # Skip HRs, we use section borders
 
-        # Unordered list
         if stripped.startswith("- ") or stripped.startswith("* "):
             if not in_ul:
-                out.append("<ul>")
+                out.append('<ul class="brief-list">')
                 in_ul = True
-            content = stripped[2:]
-            out.append(f"<li>{_inline(content)}</li>")
+            out.append(f"<li>{inline(stripped[2:])}</li>")
             continue
 
-        # Ordered list
         ol_match = re.match(r"^(\d+)\.\s(.+)", stripped)
         if ol_match:
             if not in_ol:
-                out.append("<ol>")
+                out.append('<ol class="brief-list">')
                 in_ol = True
-            out.append(f"<li>{_inline(ol_match.group(2))}</li>")
+            out.append(f"<li>{inline(ol_match.group(2))}</li>")
             continue
 
-        # Regular paragraph
-        out.append(f"<p>{_inline(stripped)}</p>")
+        # CONFIDENTIAL footer
+        if "CONFIDENTIAL" in stripped.upper():
+            out.append(
+                '<p class="confidential">CONFIDENTIAL</p>'
+            )
+            continue
 
-    # Close any open lists
+        out.append(f"<p>{inline(stripped)}</p>")
+
     if in_ul:
         out.append("</ul>")
     if in_ol:
@@ -584,15 +286,10 @@ def _md_to_html_simple(md: str) -> str:
     return "\n".join(out)
 
 
-def _inline(text: str) -> str:
-    """Convert inline markdown (bold, italic, links, code) to HTML."""
-    # Bold
+def inline(text: str) -> str:
     text = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", text)
-    # Italic
     text = re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"<em>\1</em>", text)
-    # Inline code
     text = re.sub(r"`(.+?)`", r"<code>\1</code>", text)
-    # Links
     text = re.sub(
         r"\[(\d+)\]\s*(.+?)\s*[—–-]\s*(https?://\S+)",
         r'<a href="\3" target="_blank">[\1] \2</a>',
@@ -604,6 +301,499 @@ def _inline(text: str) -> str:
         text,
     )
     return text
+
+
+# ── Custom CSS ───────────────────────────────────────────────────
+
+CUSTOM_CSS = """
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+    /* ── Reset & Global ──────────────────────────── */
+    .stApp {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        background: #f4f6f9;
+    }
+    .stDeployButton, #MainMenu, footer,
+    header[data-testid="stHeader"] { display: none !important; }
+
+    .block-container {
+        padding-top: 2rem !important;
+        padding-bottom: 2rem !important;
+        max-width: 820px !important;
+    }
+
+    /* ── Hero ────────────────────────────────────── */
+    .hero {
+        background: linear-gradient(140deg, #0b1a33 0%, #152a4e 40%, #1e3f6e 100%);
+        border-radius: 14px;
+        padding: 1.6rem 1.8rem;
+        margin-bottom: 1.25rem;
+        position: relative;
+        overflow: hidden;
+    }
+    .hero::after {
+        content: '';
+        position: absolute;
+        top: -60%;
+        right: -10%;
+        width: 300px;
+        height: 300px;
+        background: radial-gradient(circle, rgba(59,130,246,0.07) 0%, transparent 70%);
+        pointer-events: none;
+    }
+    .hero-top {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    .hero-icon {
+        width: 28px;
+        height: 28px;
+        background: rgba(59,130,246,0.2);
+        border-radius: 7px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+    }
+    .hero-badge {
+        font-size: 0.6rem;
+        font-weight: 700;
+        color: #93c5fd;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }
+    .hero h2 {
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: #fff;
+        margin: 0 0 0.25rem;
+        letter-spacing: -0.02em;
+    }
+    .hero p {
+        font-size: 0.8rem;
+        color: rgba(255,255,255,0.5);
+        margin: 0;
+        line-height: 1.45;
+    }
+
+    /* ── Search bar ──────────────────────────────── */
+    .search-wrap {
+        background: #fff;
+        border: 1px solid #dde3eb;
+        border-radius: 12px;
+        padding: 0.2rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    }
+    div[data-testid="stTextInput"] > div > div > input {
+        border: none !important;
+        box-shadow: none !important;
+        font-size: 0.9rem !important;
+        padding: 0.6rem 0.8rem !important;
+        background: transparent !important;
+    }
+    div[data-testid="stTextInput"] > div {
+        border: none !important;
+        box-shadow: none !important;
+        background: transparent !important;
+    }
+
+    /* ── Buttons ──────────────────────────────────── */
+    .stButton > button {
+        background: #1a3a6b;
+        color: white !important;
+        border: none;
+        padding: 0.6rem 1.6rem;
+        font-size: 0.82rem;
+        font-weight: 700;
+        border-radius: 9px;
+        width: 100%;
+        transition: all 0.15s ease;
+        letter-spacing: 0.01em;
+    }
+    .stButton > button:hover {
+        background: #244d8a;
+        box-shadow: 0 3px 10px rgba(26,58,107,0.25);
+    }
+    .stDownloadButton > button {
+        background: #fff !important;
+        color: #1a3a6b !important;
+        border: 1.5px solid #dde3eb !important;
+        font-weight: 600 !important;
+        font-size: 0.78rem !important;
+        border-radius: 8px !important;
+        padding: 0.45rem 1rem !important;
+    }
+    .stDownloadButton > button:hover {
+        background: #f4f6f9 !important;
+        border-color: #1a3a6b !important;
+    }
+
+    /* ── Step tracker ─────────────────────────────── */
+    .step-tracker {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0;
+        padding: 1.25rem 0;
+        margin: 0.5rem 0;
+    }
+    .step {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+    .step-dot {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.65rem;
+        font-weight: 700;
+        flex-shrink: 0;
+        transition: all 0.3s ease;
+    }
+    .step-dot.pending {
+        background: #e8ecf1;
+        color: #94a3b8;
+    }
+    .step-dot.active {
+        background: #1a3a6b;
+        color: #fff;
+        box-shadow: 0 0 0 4px rgba(26,58,107,0.15);
+        animation: step-pulse 1.5s ease-in-out infinite;
+    }
+    .step-dot.done {
+        background: #059669;
+        color: #fff;
+    }
+    .step-label {
+        font-size: 0.68rem;
+        font-weight: 600;
+        color: #94a3b8;
+        transition: color 0.3s ease;
+    }
+    .step-label.active { color: #1a3a6b; }
+    .step-label.done { color: #059669; }
+    .step-line {
+        width: 36px;
+        height: 2px;
+        background: #e8ecf1;
+        margin: 0 0.35rem;
+        flex-shrink: 0;
+        transition: background 0.3s ease;
+    }
+    .step-line.done { background: #059669; }
+    @keyframes step-pulse {
+        0%, 100% { box-shadow: 0 0 0 4px rgba(26,58,107,0.15); }
+        50% { box-shadow: 0 0 0 8px rgba(26,58,107,0.08); }
+    }
+
+    /* ── Results card ─────────────────────────────── */
+    .result-card {
+        background: #fff;
+        border: 1px solid #dde3eb;
+        border-radius: 14px;
+        padding: 1.4rem 1.6rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    }
+    .result-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 0.6rem;
+    }
+    .result-company {
+        font-size: 1.2rem;
+        font-weight: 800;
+        color: #0f172a;
+        margin: 0;
+        letter-spacing: -0.02em;
+    }
+    .result-meta {
+        font-size: 0.72rem;
+        color: #94a3b8;
+    }
+    .result-stats {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        margin-top: 0.5rem;
+    }
+    .stat-pill {
+        display: inline-block;
+        background: #f4f6f9;
+        color: #475569;
+        font-size: 0.67rem;
+        font-weight: 500;
+        padding: 0.2rem 0.55rem;
+        border-radius: 5px;
+    }
+    .score-row {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid #f1f5f9;
+    }
+    .score-stars {
+        font-size: 1.15rem;
+        letter-spacing: 1px;
+        line-height: 1;
+    }
+    .star-on { color: #f59e0b; }
+    .star-off { color: #e2e8f0; }
+    .score-num {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #475569;
+    }
+    .score-reason {
+        font-size: 0.75rem;
+        color: #64748b;
+        line-height: 1.45;
+        margin-top: 0.4rem;
+    }
+
+    /* ── Tabs ─────────────────────────────────────── */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 2px;
+        background: #edf0f4;
+        border-radius: 10px;
+        padding: 3px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.45rem 1rem;
+        border-radius: 8px;
+        color: #64748b;
+    }
+    .stTabs [aria-selected="true"] {
+        background: #fff !important;
+        color: #0f172a !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+
+    /* ── Brief document ──────────────────────────── */
+    .brief-doc {
+        background: #fff;
+        border: 1px solid #dde3eb;
+        border-radius: 14px;
+        padding: 1.8rem 2rem;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+        color: #1e293b;
+        line-height: 1.6;
+    }
+    .brief-doc h2 {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #152a4e;
+        margin: 1.2rem 0 0.4rem;
+    }
+    .brief-doc .section-head {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-top: 1.6rem;
+        margin-bottom: 0.6rem;
+        padding-bottom: 0.35rem;
+        border-bottom: 1px solid #edf0f4;
+    }
+    .brief-doc .section-accent {
+        width: 3px;
+        height: 18px;
+        background: #2563eb;
+        border-radius: 2px;
+        flex-shrink: 0;
+    }
+    .brief-doc .section-head h3 {
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #1a3a6b;
+        margin: 0;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .brief-doc p {
+        font-size: 0.82rem;
+        margin-bottom: 0.5rem;
+    }
+    .brief-doc .brief-list {
+        font-size: 0.82rem;
+        padding-left: 1.1rem;
+        margin: 0.3rem 0 0.6rem;
+    }
+    .brief-doc .brief-list li {
+        margin-bottom: 0.3rem;
+        line-height: 1.5;
+    }
+    .brief-doc .brief-list li::marker {
+        color: #2563eb;
+    }
+    .brief-doc strong { color: #0f172a; }
+    .brief-doc em { color: #64748b; font-style: italic; }
+    .brief-doc a {
+        color: #2563eb;
+        text-decoration: none;
+    }
+    .brief-doc a:hover { text-decoration: underline; }
+    .brief-doc code {
+        background: #f1f5f9;
+        padding: 0.1rem 0.3rem;
+        border-radius: 3px;
+        font-size: 0.78rem;
+    }
+    .brief-doc .confidential {
+        text-align: center;
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-top: 1.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid #edf0f4;
+    }
+
+    /* ── Sidebar ──────────────────────────────────── */
+    [data-testid="stSidebar"] { background: #f9fafb; }
+    [data-testid="stSidebar"] .block-container { padding-top: 1.5rem !important; }
+    .sb-title {
+        font-size: 0.65rem;
+        font-weight: 700;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-bottom: 0.6rem;
+    }
+    .sb-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0.6rem;
+        border-radius: 8px;
+        margin-bottom: 0.25rem;
+        transition: background 0.1s ease;
+        cursor: default;
+    }
+    .sb-item:hover { background: #f1f5f9; }
+    .sb-company {
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #1e293b;
+    }
+    .sb-right {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+    .sb-stars {
+        font-size: 0.7rem;
+        color: #f59e0b;
+        letter-spacing: 0.5px;
+    }
+    .sb-time {
+        font-size: 0.62rem;
+        color: #94a3b8;
+    }
+
+    /* ── How it works ─────────────────────────────── */
+    .hiw-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.6rem;
+        margin: 0.5rem 0;
+    }
+    .hiw-card {
+        background: #f4f6f9;
+        border-radius: 10px;
+        padding: 0.8rem;
+        text-align: center;
+    }
+    .hiw-num {
+        width: 22px;
+        height: 22px;
+        background: #1a3a6b;
+        color: #fff;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.6rem;
+        font-weight: 700;
+        margin-bottom: 0.35rem;
+    }
+    .hiw-label {
+        font-size: 0.68rem;
+        font-weight: 600;
+        color: #1e293b;
+        margin: 0;
+    }
+    .hiw-desc {
+        font-size: 0.62rem;
+        color: #64748b;
+        margin: 0.15rem 0 0;
+        line-height: 1.35;
+    }
+</style>
+"""
+
+
+# ── Step tracker ─────────────────────────────────────────────────
+
+STEPS = [
+    ("1", "Starting"),
+    ("2", "Researching"),
+    ("3", "Analyzing"),
+    ("4", "Composing"),
+]
+
+PHASE_TO_STEP = {
+    "init": 0,
+    "research": 1,
+    "search": 1,
+    "analyze": 2,
+    "compose": 3,
+    "done": 4,
+}
+
+
+def render_step_tracker(current_phase: str) -> str:
+    active_idx = PHASE_TO_STEP.get(current_phase, 0)
+    parts = []
+    for i, (num, label) in enumerate(STEPS):
+        if i < active_idx:
+            dot_cls = "done"
+            label_cls = "done"
+            icon = "&#10003;"
+        elif i == active_idx:
+            dot_cls = "active"
+            label_cls = "active"
+            icon = num
+        else:
+            dot_cls = "pending"
+            label_cls = ""
+            icon = num
+
+        parts.append(
+            f'<div class="step">'
+            f'<span class="step-dot {dot_cls}">{icon}</span>'
+            f'<span class="step-label {label_cls}">{label}</span>'
+            f'</div>'
+        )
+        if i < len(STEPS) - 1:
+            line_cls = "done" if i < active_idx else ""
+            parts.append(f'<div class="step-line {line_cls}"></div>')
+
+    return f'<div class="step-tracker">{"".join(parts)}</div>'
 
 
 # ── Streamlit UI ─────────────────────────────────────────────────
@@ -622,62 +812,60 @@ def main() -> None:
 
     # ── Sidebar ──────────────────────────────────────────────
     with st.sidebar:
-        st.markdown(
-            '<p class="sidebar-title">Brief History</p>',
-            unsafe_allow_html=True,
-        )
+        st.markdown('<p class="sb-title">History</p>', unsafe_allow_html=True)
+
         if not st.session_state.brief_history:
-            st.caption("No briefs generated yet.")
+            st.caption("No briefs yet.")
         else:
             for i, entry in enumerate(st.session_state.brief_history):
-                score = entry.get("score", 0)
-                stars = ("&#9733;" * score) + ("&#9734;" * (5 - score))
-                with st.expander(
-                    f"{entry['company']}  |  {entry.get('time', '')}",
-                    expanded=False,
-                ):
-                    st.markdown(
-                        f"<span style='color:#f59e0b;font-size:0.9rem;'>{stars}</span>",
-                        unsafe_allow_html=True,
-                    )
-                    st.download_button(
-                        label="Download",
-                        data=entry["brief_md"],
-                        file_name=f"{entry['company'].replace(' ', '_')}_Alkira_Brief.md",
-                        mime="text/markdown",
-                        key=f"sb_{i}",
-                    )
-
-        st.markdown("---")
-        st.caption("Powered by Alkira + Claude")
+                s = entry.get("score", 0)
+                stars_html = "&#9733;" * s + "&#9734;" * (5 - s)
+                st.markdown(
+                    f'<div class="sb-item">'
+                    f'<span class="sb-company">{entry["company"]}</span>'
+                    f'<div class="sb-right">'
+                    f'<span class="sb-stars">{stars_html}</span>'
+                    f'<span class="sb-time">{entry.get("time", "")}</span>'
+                    f'</div></div>',
+                    unsafe_allow_html=True,
+                )
+                st.download_button(
+                    label=f"Download",
+                    data=entry["brief_md"],
+                    file_name=f"{entry['company'].replace(' ', '_')}_Brief.md",
+                    mime="text/markdown",
+                    key=f"sb_{i}",
+                )
 
     # ── Hero ─────────────────────────────────────────────────
     st.markdown(
         '<div class="hero">'
-        '<div class="hero-badge">Channel Sales Intelligence</div>'
-        "<h2>Alkira Opportunity Brief Generator</h2>"
-        "<p>Enter a company name. The agent researches it and builds a "
-        "scored opportunity brief with Alkira fit analysis, proof points, "
-        "and strategic sales questions.</p>"
+        '<div class="hero-top">'
+        '<div class="hero-icon">&#9670;</div>'
+        '<span class="hero-badge">Channel Sales Intelligence</span>'
+        '</div>'
+        "<h2>Alkira Brief Generator</h2>"
+        "<p>Research any company. Get a scored opportunity brief with "
+        "Alkira fit analysis, proof points, and sales questions.</p>"
         "</div>",
         unsafe_allow_html=True,
     )
 
-    # ── Config check ─────────────────────────────────────────
+    # ── Config ───────────────────────────────────────────────
     config = load_config()
     if not config.agent_id or not config.env_id or not config.api_key:
         st.error(
-            "Missing configuration. Set `ANTHROPIC_API_KEY`, `ALKIRA_AGENT_ID`, "
-            "and `ALKIRA_ENV_ID` in `.env` or Streamlit secrets."
+            "Missing config. Set ANTHROPIC_API_KEY, ALKIRA_AGENT_ID, "
+            "and ALKIRA_ENV_ID in .env or Streamlit secrets."
         )
         return
 
-    # ── Input ────────────────────────────────────────────────
-    col1, col2 = st.columns([4, 1])
+    # ── Search bar ───────────────────────────────────────────
+    col1, col2 = st.columns([5, 1])
     with col1:
         company_name = st.text_input(
-            "Company name",
-            placeholder="e.g.  Mary Kay,  Chevron,  Walmart,  Koch Industries",
+            "Company",
+            placeholder="Enter a company name...",
             label_visibility="collapsed",
         )
     with col2:
@@ -685,20 +873,13 @@ def main() -> None:
 
     # ── Generation ───────────────────────────────────────────
     if generate and company_name.strip():
-        status_placeholder = st.empty()
-        progress_bar = st.progress(0)
+        tracker_ph = st.empty()
+        current_phase = {"value": "init"}
 
-        phase_pct = {"init": 5, "research": 20, "search": 45, "analyze": 75}
-        step = {"n": 0}
-
-        def update_status(msg: str, phase: str = "research") -> None:
-            step["n"] += 1
-            pct = phase_pct.get(phase, min(step["n"] * 12, 90))
-            progress_bar.progress(min(pct, 95))
-            status_placeholder.markdown(
-                f'<div class="status-pill">'
-                f'<span class="status-dot"></span>{msg}'
-                f"</div>",
+        def update_status(phase: str) -> None:
+            current_phase["value"] = phase
+            tracker_ph.markdown(
+                render_step_tracker(phase),
                 unsafe_allow_html=True,
             )
 
@@ -711,82 +892,119 @@ def main() -> None:
                 )
 
             elapsed = time.time() - start
-            progress_bar.progress(100)
-            status_placeholder.empty()
-            progress_bar.empty()
+            tracker_ph.empty()
 
-            # Clean and parse
             brief_md = clean_brief(raw)
             score, reasoning = extract_score(brief_md)
+            company, stats_line = extract_company_header(brief_md)
+            if not company:
+                company = company_name.strip()
 
-            # ── Meta bar ─────────────────────────────────
+            # Parse stats into pills
+            stat_pills = ""
+            if stats_line:
+                parts = re.split(r"\s*\|\s*", stats_line.strip("* "))
+                pills = "".join(
+                    f'<span class="stat-pill">{p.strip()}</span>'
+                    for p in parts if p.strip()
+                )
+                stat_pills = f'<div class="result-stats">{pills}</div>'
+
+            # Score stars
+            filled = ''.join(
+                '<span class="star-on">&#9733;</span>' for _ in range(score)
+            )
+            empty = ''.join(
+                '<span class="star-off">&#9733;</span>' for _ in range(5 - score)
+            )
+
+            # ── Results card ─────────────────────────────
             st.markdown(
-                f'<div class="meta-bar">'
-                f'<span class="meta-label">Opportunity Brief</span>'
-                f'<span class="meta-time">Generated in {elapsed:.0f}s</span>'
-                f"</div>",
+                f'<div class="result-card">'
+                f'<div class="result-top">'
+                f'<div>'
+                f'<p class="result-company">{company}</p>'
+                f'{stat_pills}'
+                f'</div>'
+                f'<span class="result-meta">Generated in {elapsed:.0f}s</span>'
+                f'</div>'
+                f'<div class="score-row">'
+                f'<span class="score-stars">{filled}{empty}</span>'
+                f'<span class="score-num">{score}/5</span>'
+                f'</div>'
+                f'<p class="score-reason">{reasoning}</p>'
+                f'</div>',
                 unsafe_allow_html=True,
             )
 
-            # ── Score + download row ─────────────────────
-            sc_col, dl_col = st.columns([3, 1])
-            with sc_col:
-                render_score_card(score, reasoning)
-            with dl_col:
-                safe = company_name.strip().replace(" ", "_")
-                st.download_button(
-                    label="Download Brief",
-                    data=brief_md,
-                    file_name=f"{safe}_Alkira_Brief.md",
-                    mime="text/markdown",
-                    key="main_dl",
-                )
+            # ── Download ─────────────────────────────────
+            safe = company_name.strip().replace(" ", "_")
+            st.download_button(
+                label=f"Download {company} Brief",
+                data=brief_md,
+                file_name=f"{safe}_Alkira_Brief.md",
+                mime="text/markdown",
+                key="main_dl",
+            )
 
-            # ── Tabbed brief display ─────────────────────
-            tab_full, tab_sales, tab_refs = st.tabs([
-                "Full Brief", "Sales Playbook", "References",
+            # ── Tabs ─────────────────────────────────────
+            tab_brief, tab_sales, tab_refs = st.tabs([
+                "Brief", "Sales Playbook", "References",
             ])
 
-            with tab_full:
-                render_brief(brief_md)
+            with tab_brief:
+                body = get_brief_body(brief_md)
+                html = md_to_html(body)
+                st.markdown(
+                    f'<div class="brief-doc">{html}</div>',
+                    unsafe_allow_html=True,
+                )
 
             with tab_sales:
                 playbook = extract_section(brief_md, "Partner Playbook")
                 signals = extract_section(brief_md, "Signals & Timing")
-                # Fallbacks for older brief format
                 if not playbook:
                     playbook = extract_section(brief_md, "Strategic Sales Questions")
                 if not signals:
                     signals = extract_section(brief_md, "Why Now")
 
+                content = ""
                 if signals:
-                    st.markdown("#### Signals & Timing")
-                    st.markdown(signals)
+                    content += f"### Signals & Timing\n\n{signals}\n\n"
                 if playbook:
-                    st.markdown("#### Partner Playbook")
-                    st.markdown(playbook)
+                    content += f"### Partner Playbook\n\n{playbook}\n\n"
 
-                if not (playbook or signals):
-                    st.info("Sales sections not found in brief output.")
+                if content:
+                    html = md_to_html(content)
+                    st.markdown(
+                        f'<div class="brief-doc">{html}</div>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.info("Sales sections not found.")
 
             with tab_refs:
                 refs = extract_section(brief_md, "References")
                 confidence = extract_section(brief_md, "Confidence & Gaps")
-
+                content = ""
                 if confidence:
-                    st.markdown("#### Confidence & Gaps")
-                    st.markdown(confidence)
+                    content += f"### Confidence & Gaps\n\n{confidence}\n\n"
                 if refs:
-                    st.markdown("#### Sources")
-                    st.markdown(refs)
+                    content += f"### References\n\n{refs}\n\n"
 
-                if not (refs or confidence):
-                    st.info("Reference sections not found in brief output.")
+                if content:
+                    html = md_to_html(content)
+                    st.markdown(
+                        f'<div class="brief-doc">{html}</div>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.info("Reference sections not found.")
 
-            # ── Save to history ──────────────────────────
+            # ── History ──────────────────────────────────
             timestamp = time.strftime("%I:%M %p")
             st.session_state.brief_history.insert(0, {
-                "company": company_name.strip(),
+                "company": company,
                 "brief_md": brief_md,
                 "score": score,
                 "time": timestamp,
@@ -794,29 +1012,36 @@ def main() -> None:
             st.session_state.brief_history = st.session_state.brief_history[:10]
 
         except TimeoutError:
-            progress_bar.empty()
-            status_placeholder.empty()
+            tracker_ph.empty()
             st.error("Timed out after 5 minutes. Try again.")
 
         except Exception as exc:
-            progress_bar.empty()
-            status_placeholder.empty()
+            tracker_ph.empty()
             st.error(f"Something went wrong: {exc}")
 
     elif generate:
         st.warning("Enter a company name first.")
 
-    # ── Footer ───────────────────────────────────────────────
+    # ── How it works ─────────────────────────────────────────
     with st.expander("How it works"):
         st.markdown(
-            "1. **Enter a company name** you or a partner is pursuing.\n"
-            "2. **The agent researches it** across the web for cloud strategy, "
-            "IT leadership, M&A activity, and pain signals.\n"
-            "3. **Alkira fit is scored 1-5 stars** based on evidence strength.\n"
-            "4. **You get a brief** with proof points, sales questions tied to "
-            "real data, and verifiable source references.\n\n"
-            "Briefs typically take 2-4 minutes."
+            '<div class="hiw-grid">'
+            '<div class="hiw-card"><div class="hiw-num">1</div>'
+            '<p class="hiw-label">Enter</p>'
+            '<p class="hiw-desc">Type any company name</p></div>'
+            '<div class="hiw-card"><div class="hiw-num">2</div>'
+            '<p class="hiw-label">Research</p>'
+            '<p class="hiw-desc">Agent searches the web</p></div>'
+            '<div class="hiw-card"><div class="hiw-num">3</div>'
+            '<p class="hiw-label">Score</p>'
+            '<p class="hiw-desc">Maps to Alkira fit 1-5</p></div>'
+            '<div class="hiw-card"><div class="hiw-num">4</div>'
+            '<p class="hiw-label">Brief</p>'
+            '<p class="hiw-desc">Proof points + questions</p></div>'
+            '</div>',
+            unsafe_allow_html=True,
         )
+        st.caption("Briefs take 2-4 minutes.")
 
 
 if __name__ == "__main__":
