@@ -1,36 +1,49 @@
 """
 One-time setup: creates the Alkira Brief Generator agent and environment.
-Run setup_skills.py first to upload the skill, then run this.
+Run setup_skills.py first to upload skills, then run this.
 
 Usage:
     python setup_agent.py
 """
 
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from anthropic import Anthropic
 from system_prompt import ALKIRA_SYSTEM_PROMPT
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
+SKILL_ENV_KEYS = [
+    "ALKIRA_CUSTOMER_SKILL_ID",
+    "ALKIRA_BRIEF_TEMPLATE_SKILL_ID",
+    # Legacy key from single-skill setup
+    "ALKIRA_SKILL_ID",
+]
+
 
 def main():
-    client = Anthropic()  # reads ANTHROPIC_API_KEY from env
+    client = Anthropic()
 
-    # ── Attach skill if available ────────────────────────────────
-    skill_id = os.environ.get("ALKIRA_SKILL_ID", "")
+    # ── Collect skill IDs ────────────────────────────────────────
     skills = []
-    if skill_id:
-        skills.append({"type": "custom", "skill_id": skill_id, "version": "latest"})
-        print(f"Attaching skill: {skill_id}")
-    else:
-        print("Warning: ALKIRA_SKILL_ID not set. Run setup_skills.py first.")
+    for key in SKILL_ENV_KEYS:
+        skill_id = os.environ.get(key, "")
+        if skill_id:
+            skills.append({"type": "custom", "skill_id": skill_id, "version": "latest"})
+            print(f"  Attaching skill: {key}={skill_id}")
+
+    if not skills:
+        print("Warning: No skill IDs found. Run setup_skills.py first.")
 
     # ── Create the agent definition ──────────────────────────────
-    print("Creating agent...")
+    print("\nCreating agent...")
     agent = client.beta.agents.create(
         name="Alkira Opportunity Brief Generator",
-        description="Researches a company and produces a one-page Alkira opportunity brief as markdown.",
+        description=(
+            "Researches a company and produces a scored Alkira opportunity brief "
+            "with fit scoring, strategic sales questions, and source references."
+        ),
         model="claude-sonnet-4-6",
         system=ALKIRA_SYSTEM_PROMPT,
         tools=[
@@ -57,11 +70,22 @@ def main():
     )
     print(f"  Environment ID: {environment.id}")
 
-    # ── Save IDs to .env file ────────────────────────────────────
-    env_path = os.path.join(os.path.dirname(__file__), ".env")
-    with open(env_path, "a") as f:
-        f.write(f"\nALKIRA_AGENT_ID={agent.id}\n")
-        f.write(f"ALKIRA_ENV_ID={environment.id}\n")
+    # ── Save IDs to .env (overwrite old values) ──────────────────
+    env_path = Path(__file__).parent / ".env"
+
+    existing_lines = []
+    if env_path.exists():
+        existing_lines = env_path.read_text().splitlines()
+
+    keys_to_replace = {"ALKIRA_AGENT_ID", "ALKIRA_ENV_ID"}
+    filtered = [
+        line for line in existing_lines
+        if not any(line.startswith(f"{key}=") for key in keys_to_replace)
+    ]
+    filtered.append(f"ALKIRA_AGENT_ID={agent.id}")
+    filtered.append(f"ALKIRA_ENV_ID={environment.id}")
+
+    env_path.write_text("\n".join(filtered) + "\n")
 
     print(f"\nSetup complete. IDs saved to {env_path}")
     print("You can now run: streamlit run app.py")

@@ -45,9 +45,10 @@ def generate_brief(company_name: str, output_path: str = None, verbose: bool = F
 
     # ── Send the prompt ──────────────────────────────────────────
     prompt = (
-        f'Research the company "{company_name}" and generate a one-page Alkira '
+        f'Research the company "{company_name}" and generate an Alkira '
         f"opportunity brief. Follow the brief structure and writing style in your "
-        f"instructions exactly. Focus on information from the past 12 months. "
+        f"instructions exactly. Include the Alkira Fit Score, strategic sales "
+        f"questions, and references. Focus on information from the past 12 months. "
         f"Return the brief as markdown text."
     )
 
