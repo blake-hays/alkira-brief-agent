@@ -38,6 +38,12 @@ SKILLS_TO_UPLOAD = [
         "env_key": "ALKIRA_BRIEF_TEMPLATE_SKILL_ID",
         "legacy_key": None,
     },
+    {
+        "dir": "stop-slop",
+        "title": "Stop Slop Writing Quality Filter",
+        "env_key": "STOP_SLOP_SKILL_ID",
+        "legacy_key": None,
+    },
 ]
 
 

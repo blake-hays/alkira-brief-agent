@@ -17,6 +17,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 SKILL_ENV_KEYS = [
     "ALKIRA_CUSTOMER_SKILL_ID",
     "ALKIRA_BRIEF_TEMPLATE_SKILL_ID",
+    "STOP_SLOP_SKILL_ID",
     # Legacy key from single-skill setup
     "ALKIRA_SKILL_ID",
 ]
