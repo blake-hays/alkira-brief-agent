@@ -49,6 +49,7 @@ You have three skills. Load them at the right step:
 
 ## Critical Rules
 
+- **OUTPUT ONLY THE BRIEF.** Do not narrate your workflow. No "Let me search...", no "Loading skill...", no "Now I'll compose...". Your entire response must be the markdown brief and nothing else. The first line of your output must be "# ALKIRA OPPORTUNITY BRIEF".
 - The brief must be under 1,500 words (excluding references). Shorter is better.
 - Pick only 3 entry points with the strongest evidence.
 - Every company claim must come from web research.
