@@ -751,21 +751,22 @@ def main() -> None:
                 render_brief(brief_md)
 
             with tab_sales:
-                sales_q = extract_section(brief_md, "Strategic Sales Questions")
-                entry_pts = extract_section(brief_md, "Partner Entry Points")
-                why_now = extract_section(brief_md, "Why Now")
+                playbook = extract_section(brief_md, "Partner Playbook")
+                signals = extract_section(brief_md, "Signals & Timing")
+                # Fallbacks for older brief format
+                if not playbook:
+                    playbook = extract_section(brief_md, "Strategic Sales Questions")
+                if not signals:
+                    signals = extract_section(brief_md, "Why Now")
 
-                if entry_pts:
-                    st.markdown("#### Partner Entry Points")
-                    st.markdown(entry_pts)
-                if why_now:
-                    st.markdown("#### Why Now")
-                    st.markdown(why_now)
-                if sales_q:
-                    st.markdown("#### Strategic Sales Questions")
-                    st.markdown(sales_q)
+                if signals:
+                    st.markdown("#### Signals & Timing")
+                    st.markdown(signals)
+                if playbook:
+                    st.markdown("#### Partner Playbook")
+                    st.markdown(playbook)
 
-                if not (sales_q or entry_pts or why_now):
+                if not (playbook or signals):
                     st.info("Sales sections not found in brief output.")
 
             with tab_refs:

@@ -1,153 +1,130 @@
 ---
 name: alkira-brief-template
-description: "Brief template, scoring rubric, and output format for the Alkira Opportunity Brief Generator. Load this skill before composing any brief. Contains the 13-section brief structure with word limits, 1-5 star Alkira fit scoring criteria, strategic sales question format, research checklist, and confidence & gaps framework."
+description: "Brief template, scoring rubric, and output format for the Alkira Opportunity Brief Generator. Load this skill before composing any brief. Contains the brief structure with strict sentence limits, 1-5 star scoring criteria, and research checklist."
 ---
 
 # Alkira Opportunity Brief — Template & Scoring
 
-Load this skill before composing a brief. It defines what you're building: the output structure, scoring rubric, research targets, and quality expectations.
+Load this skill before composing a brief.
 
-**CRITICAL: Brevity is a feature.** The entire brief must be under 1,500 words (excluding references). Each section has a max word count. A partner reads this between meetings. Dense beats thorough.
+**THE BRIEF MUST FIT ON TWO PRINTED PAGES.** That means ~800 words of content (excluding references). Every section below has a sentence limit. Do not exceed it. If you write a sentence that doesn't add new information, delete it.
 
 ---
 
 ## Research Checklist
 
-Find all of the following. Mark each finding as **(confirmed)** or **(directional)** in the brief.
+Find all of the following. Mark findings as **(confirmed)** or **(directional)**.
 
 | Category | What to find |
 |----------|-------------|
-| **Company basics** | HQ, revenue, employee count, industry, public/private |
-| **Global footprint** | Offices, distribution centers, manufacturing, markets served |
-| **IT leadership** | CIO/CTO name + background + recent quotes. Roles only if names not public. |
-| **Cloud platforms** | All known or inferred providers (AWS, Azure, GCP). Classify by production, dev/test, specialised. |
-| **On-prem / hybrid** | Name platforms if public: VMware, Nutanix, Citrix, HCI, etc. |
-| **Network / security** | MPLS, multicloud, firewalls, SD-WAN, zero trust mentions |
-| **Digital transformation** | Cloud migration, modernization, tech investments, AI initiatives |
-| **Organisational signals** | Leadership changes, modernisation programmes, geographic expansion |
-| **Pain signals** | Outages, security incidents, compliance pressure, cost-cutting, vendor consolidation |
-| **Recent news** | M&A, expansion, funding, restructuring (past 12 months) |
+| Company basics | HQ, revenue, employees, industry, public/private |
+| Global footprint | Offices, facilities, markets served |
+| IT leadership | CIO/CTO name + background. Roles only if names not public. |
+| Cloud platforms | Providers (AWS, Azure, GCP). Production vs dev/test. |
+| On-prem / hybrid | VMware, Nutanix, Citrix, HCI if public |
+| Network / security | MPLS, multicloud, firewalls, SD-WAN, zero trust |
+| Organisational signals | Leadership changes, M&A, expansion, cost-cutting |
+| Pain signals | Outages, compliance pressure, vendor consolidation |
 
 ---
 
 ## Alkira Fit Score (1-5 Stars)
 
-Format:
-
 ```
 **Alkira Fit Score: [X] / 5**
 ```
 
-Then 2 sentences explaining why. Not 3. Two.
+Then **exactly 2 sentences** explaining why. Not 3.
 
-### Scoring Criteria
-
-**5 Stars** — Strong fit, clear urgency
-- Multiple entry points with direct evidence (active multicloud migration, MPLS expiring, M&A, stated cloud cost concerns)
-- IT leadership publicly discussing infrastructure modernization
-- Visible pain signals or budget triggers
-
-**4 Stars** — Good fit, solid indicators
-- 2+ strong entry points with evidence
-- Cloud-forward but pain points inferred, not stated
-- IT leadership identified but no public infra quotes
-
-**3 Stars** — Moderate fit, worth pursuing
-- 1-2 entry points with reasonable evidence
-- Limited IT leadership visibility in public sources
-
-**2 Stars** — Weak fit, needs discovery
-- Entry points speculative based on size/industry
-- Little public info on IT infrastructure
-
-**1 Star** — Poor fit on available data
-- No clear entry points; minimal cloud presence
+**5** — Multiple entry points with direct evidence. Active infrastructure modernization.
+**4** — 2+ entry points with evidence. Cloud-forward but pain inferred, not stated.
+**3** — 1-2 entry points with reasonable evidence. Limited public detail.
+**2** — Entry points speculative. Little public infrastructure info.
+**1** — No clear entry points on available data.
 
 ---
 
-## Brief Structure (13 Sections)
+## Brief Structure
 
-**Total target: under 1,500 words** (excluding references). Section limits below are maximums, not targets. Shorter is better.
+**Sentence limits are hard limits. Do not exceed them.**
 
 ### 1. Title
-H1: **"ALKIRA OPPORTUNITY BRIEF"** with date. *(5 words)*
+```
+# ALKIRA OPPORTUNITY BRIEF
+*[Month Year]*
+```
 
 ### 2. Company Header
-H2: **Company name** + stats line (HQ, revenue, employees, industry, markets, ownership). *(1 line)*
-
-### 3. Alkira Fit Score
-Score + 2-sentence rationale. *(~50 words max)*
-
-### 4. Executive Summary *(~100 words max)*
-H3: **"Executive Summary"** — 4-6 bullet points that stand alone. Each bullet is 1 sentence. Cover: fit assessment, scale/regulatory gravity, primary complexity source. A partner reads ONLY this and decides whether to pursue.
-
-### 5. Cloud & Infrastructure Reality *(~120 words max)*
-H3: **"Cloud & Infrastructure Reality"** — Single consolidated view:
-- **Cloud Platforms**: Provider list with (confirmed)/(directional) tags
-- **On-Prem / Hybrid**: Named platforms if public
-- **Deployment Model**: 1 sentence with evidence
-- **Resulting Complexity**: 2 sentences max. Plain English.
-
-### 6. Organisational & Strategic Signals *(~80 words max)*
-H3: **"Organisational & Strategic Signals"** — Max 4 bullets, 1-2 sentences each. Only signals that affect networking decisions. Name concrete examples.
-
-### 7. Three Areas Where Alkira Fits *(~300 words max, ~100 per entry point)*
-H3: **"Three Areas Where Alkira Fits"** — For each of 3 entry points, bold subheading, then:
-- **Why it matters here**: 1-2 sentences. The signal from research.
-- **How Alkira solves it**: 1-2 sentences. The capability.
-- **Proof point**: 1 sentence. Real metric from alkira-customer skill.
-
-Keep each entry point tight. No multi-paragraph explanations.
-
-### 8. Partner Entry Points *(~80 words max)*
-H3: **"Partner Entry Points"**:
-- **Likely stakeholders**: 3-5 role titles on one line
-- **Opening angle**: 1-2 sentences
-- **Validate early**: 3-4 short bullet points
-
-### 9. Why Now *(~60 words max)*
-H3: **"Why Now"** — 3-4 bullet points, 1 sentence each.
-
-### 10. Strategic Sales Questions *(~200 words max)*
-H3: **"Strategic Sales Questions"** — Exactly 5 numbered questions.
-
-Each question: 1-2 sentences max. Must reference a specific data point from research. Include a short parenthetical on the angle it opens.
-
-Example:
 ```
-1. "Your CEO mentioned a 25% IT cost reduction target. Where does 
-   networking sit in that?" *(TCO angle — Alkira saves 40-60%)*
+## [Company Name]
+**HQ:** X | **Revenue:** X | **Employees:** X | **Industry:** X | **Markets:** X | **Ownership:** X
+```
+One line. No paragraph.
+
+### 3. Fit Score
+Score line + 2 sentences. See above.
+
+### 4. Executive Summary — MAX 5 BULLETS, 1 SENTENCE EACH
+Each bullet is one sentence. No bullet exceeds 25 words. A partner reads only this and decides whether to pursue. Cover: fit assessment, scale, primary complexity source.
+
+### 5. Infrastructure Snapshot — MAX 8 SENTENCES TOTAL
+Single consolidated section. Cover:
+- Cloud platforms with (confirmed)/(directional) tags — 1-2 sentences
+- On-prem/hybrid platforms — 1 sentence
+- Deployment model — 1 sentence
+- What this means for connectivity and governance — 2 sentences max
+
+### 6. Signals & Timing — MAX 4 BULLETS, 1 SENTENCE EACH
+Combines organisational signals and timing triggers into one section. Only signals that create urgency or affect networking decisions. Each bullet is 1 sentence.
+
+### 7. Three Alkira Entry Points — MAX 3 SENTENCES PER ENTRY POINT
+For each of the 3 entry points, bold subheading, then exactly 3 sentences:
+1. **Signal**: What you found in research that supports this. (1 sentence)
+2. **Solution**: How Alkira addresses it. (1 sentence)
+3. **Proof**: One metric from the alkira-customer skill. (1 sentence)
+
+That's 9 sentences total for this section. Not 12. Not 15. Nine.
+
+### 8. Partner Playbook — MAX 12 SENTENCES TOTAL
+Combines entry points, sales questions, and discovery into one actionable section:
+
+**Stakeholders:** 3-5 role titles on one line.
+**Opening angle:** 1 sentence.
+
+**5 Sales Questions:** Each question is 1 sentence with a short parenthetical angle note. No multi-sentence setups. Example:
+```
+1. "Your IT director said legacy customization made it hard to move fast — is that still true for the network layer?" *(Opens infra modernization conversation)*
 ```
 
-Keep questions conversational and tight. No multi-sentence setups.
+**Validate early:** 3 bullets, 1 sentence each.
 
-### 11. Confidence & Gaps *(~120 words max)*
-H3: **"Confidence & Gaps"**:
-- **Confidence**: High/Medium/Low + 1 sentence
-- **Confirmed**: 3-5 bullet points (short)
-- **Directional**: 2-4 bullet points (short)
-- **Uncertainties**: 2-3 bullet points
-- **Discovery questions**: 2-3 questions
+### 9. Confidence & Gaps — MAX 6 SENTENCES
+- Confidence: High/Medium/Low + 1 sentence why.
+- 2-3 key unknowns as a comma-separated list in 1 sentence.
+- 2 discovery questions in 2 sentences.
 
-### 12. References
-H3: **"References"** — Numbered list. Format: `[N] Description — URL`. No word limit but keep descriptions short (5-8 words each).
+This section is 4-6 sentences. Not a full page. Be blunt.
 
-### 13. Confidentiality
-*"CONFIDENTIAL"*
+### 10. References
+Numbered list. Format: `[N] Description — URL`. Short descriptions.
+
+### 11. Confidentiality
+```
+*CONFIDENTIAL*
+```
 
 ---
 
 ## Quality Gate
 
-Before delivering the brief, verify:
+Before delivering:
 
-- [ ] Total word count under 1,500 (excluding references)
-- [ ] No section exceeds its word limit
-- [ ] Every bullet is 1-2 sentences max
-- [ ] Every company claim has (confirmed) or (directional) label
-- [ ] Proof points come from alkira-customer skill metrics
-- [ ] Sales questions reference specific research data
-- [ ] No AI writing patterns (load stop-slop skill for checks)
-- [ ] No em dashes anywhere
-- [ ] No adverbs
-- [ ] No filler phrases or throat-clearing
+- [ ] Total brief fits on ~2 printed pages (~800 words excluding references)
+- [ ] Executive Summary bullets are 1 sentence each
+- [ ] No section exceeds its sentence limit
+- [ ] Each Alkira entry point is exactly 3 sentences
+- [ ] Sales questions are 1 sentence each
+- [ ] Confidence & Gaps is under 6 sentences
+- [ ] Every claim labeled (confirmed) or (directional)
+- [ ] No AI writing patterns (check stop-slop skill)
+- [ ] No em dashes, no adverbs, no filler
