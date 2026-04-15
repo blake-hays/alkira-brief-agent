@@ -490,7 +490,7 @@ def render_score_card(score: int, reasoning: str) -> None:
         f'<span class="star-empty">&#9733;</span>' for _ in range(5 - score)
     )
 
-    color_map = {5: "#059669", 4: "#0d9488", 3: "#d97706", 2: "#ea580c", 1: "#dc2626"}
+    color_map = {5: "#059669", 4: "#0d9488", 3: "#64748b", 2: "#94a3b8", 1: "#cbd5e1"}
     border_color = color_map.get(score, "#94a3b8")
 
     st.markdown(
