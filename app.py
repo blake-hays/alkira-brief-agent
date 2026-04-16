@@ -1226,7 +1226,7 @@ def _render_dashboard_cards(history: list[dict]) -> None:
         unsafe_allow_html=True,
     )
 
-    cards = history[:4]
+    cards = sorted(history, key=lambda x: x.get("score", 0), reverse=True)[:4]
     rows = [cards[:2], cards[2:4]]
 
     for row in rows:
