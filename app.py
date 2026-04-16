@@ -200,6 +200,22 @@ def extract_section(brief: str, heading: str) -> str:
     return brief[start:end].strip()
 
 
+def extract_exec_snippet(brief_md: str, max_chars: int = 120) -> str:
+    """Pull first meaningful line from Executive Summary for preview cards."""
+    section = extract_section(brief_md, "Executive Summary")
+    if not section:
+        return ""
+    for line in section.split("\n"):
+        stripped = line.strip().lstrip("- *")
+        stripped = re.sub(r"\*\*.*?\*\*", "", stripped).strip()
+        if len(stripped) > 20:
+            if len(stripped) > max_chars:
+                cut = stripped[:max_chars].rsplit(" ", 1)[0]
+                return cut + "..."
+            return stripped
+    return ""
+
+
 def get_brief_body(brief: str) -> str:
     """Get the brief content starting from Executive Summary onward,
     excluding the title, company header, and score (rendered separately)."""
@@ -856,6 +872,111 @@ CUSTOM_CSS = """
         line-height: 1.35;
     }
 
+    /* ── Stats bar ────────────────────────────────── */
+    .stats-bar {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.6rem;
+        margin-bottom: 1.25rem;
+    }
+    .stats-metric {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 0.75rem 0.9rem;
+        text-align: center;
+    }
+    .stats-value {
+        font-size: 1.2rem;
+        font-weight: 800;
+        color: #0f172a;
+        margin: 0;
+        letter-spacing: -0.02em;
+    }
+    .stats-label {
+        font-size: 0.62rem;
+        font-weight: 600;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin: 0.15rem 0 0;
+    }
+
+    /* ── Dashboard cards ──────────────────────────── */
+    .dash-label {
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin: 1rem 0 0.6rem;
+    }
+    .dash-card {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 0.9rem 1rem;
+        margin-bottom: 0.15rem;
+        transition: all 0.12s ease;
+        cursor: pointer;
+    }
+    .dash-card:hover {
+        border-color: #93c5fd;
+        box-shadow: 0 2px 8px rgba(26,58,107,0.06);
+    }
+    .dash-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 0.3rem;
+    }
+    .dash-company {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0;
+    }
+    .dash-stars {
+        font-size: 0.75rem;
+        color: #f59e0b;
+        letter-spacing: 1px;
+        flex-shrink: 0;
+    }
+    .dash-snippet {
+        font-size: 0.72rem;
+        color: #64748b;
+        line-height: 1.4;
+        margin: 0;
+    }
+    .dash-date {
+        font-size: 0.6rem;
+        color: #94a3b8;
+        margin: 0.3rem 0 0;
+    }
+
+    /* ── Empty state ──────────────────────────────── */
+    .empty-state {
+        text-align: center;
+        padding: 3rem 1rem;
+    }
+    .empty-state-icon {
+        font-size: 2.5rem;
+        margin-bottom: 0.75rem;
+        opacity: 0.3;
+    }
+    .empty-state-text {
+        font-size: 0.85rem;
+        color: #94a3b8;
+        margin: 0;
+    }
+
+    /* ── Update button ────────────────────────────── */
+    .update-row {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 0.75rem;
+    }
+
     /* ── Welcome screen ──────────────────────────── */
     .welcome-card {
         background: #fff;
@@ -1047,12 +1168,111 @@ def _ensure_briefs_loaded() -> None:
     st.session_state._briefs_loaded = True
 
 
+# ── Stats Bar ────────────────────────────────────────────────────
+
+def _render_stats_bar(history: list[dict]) -> None:
+    """Render 3-metric stats bar from brief history."""
+    if not history:
+        return
+
+    total = len(history)
+    scores = [e.get("score", 0) for e in history if e.get("score", 0) > 0]
+    avg = sum(scores) / len(scores) if scores else 0
+    latest = history[0].get("time", "").split(",")[0] if history else ""
+
+    st.markdown(
+        f'<div class="stats-bar">'
+        f'<div class="stats-metric">'
+        f'<p class="stats-value">{total}</p>'
+        f'<p class="stats-label">Briefs Generated</p>'
+        f'</div>'
+        f'<div class="stats-metric">'
+        f'<p class="stats-value">{avg:.1f} / 5</p>'
+        f'<p class="stats-label">Avg Fit Score</p>'
+        f'</div>'
+        f'<div class="stats-metric">'
+        f'<p class="stats-value">{latest or "—"}</p>'
+        f'<p class="stats-label">Latest Brief</p>'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+# ── Dashboard Cards ──────────────────────────────────────────────
+
+def _render_dashboard_cards(history: list[dict]) -> None:
+    """Render up to 4 recent briefs as preview cards, or empty state."""
+    if not history:
+        st.markdown(
+            '<div class="empty-state">'
+            '<div class="empty-state-icon">&#9670;</div>'
+            '<p class="empty-state-text">Generate your first brief to get started.</p>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    st.markdown(
+        '<p class="dash-label">Recent Briefs</p>',
+        unsafe_allow_html=True,
+    )
+
+    cards = history[:4]
+    rows = [cards[:2], cards[2:4]]
+
+    for row in rows:
+        if not row:
+            break
+        cols = st.columns(2)
+        for col_idx, entry in enumerate(row):
+            with cols[col_idx]:
+                s = entry.get("score", 0)
+                stars = "\u2605" * s + "\u2606" * (5 - s)
+                snippet = extract_exec_snippet(entry.get("brief_md", ""))
+                date = entry.get("time", "")
+
+                st.markdown(
+                    f'<div class="dash-card">'
+                    f'<div class="dash-top">'
+                    f'<p class="dash-company">{entry.get("company", "")}</p>'
+                    f'<span class="dash-stars">{stars}</span>'
+                    f'</div>'
+                    f'<p class="dash-snippet">{snippet}</p>'
+                    f'<p class="dash-date">{date}</p>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+                # Find the real index in history for this entry
+                real_idx = history.index(entry)
+                if st.button(
+                    "Open",
+                    key=f"dash_{real_idx}",
+                    use_container_width=True,
+                ):
+                    st.session_state["viewing_brief"] = real_idx
+                    st.rerun()
+
+
 # ── Brief Display ────────────────────────────────────────────────
 
-def render_brief_display(brief_md: str, meta_right: str = "") -> None:
+def render_brief_display(
+    brief_md: str,
+    meta_right: str = "",
+    show_update: bool = False,
+) -> None:
     """Render a full brief with results card, score, and tabs."""
     score, reasoning = extract_score(brief_md)
     company, stats_line = extract_company_header(brief_md)
+
+    # Update button
+    if show_update and company:
+        _, btn_col = st.columns([4, 1])
+        with btn_col:
+            if st.button("Update Brief", key="update_brief", use_container_width=True):
+                st.session_state["_update_company"] = company
+                st.rerun()
 
     # Stats pills
     stat_pills = ""
@@ -1195,11 +1415,12 @@ def main() -> None:
         else:
             for i, entry in enumerate(st.session_state.brief_history):
                 s = entry.get("score", 0)
-                stars_html = "&#9733;" * s + "&#9734;" * (5 - s)
+                star_str = "\u2605" * s + "\u2606" * (5 - s)
                 is_active = st.session_state.get("viewing_brief") == i
-                active_cls = "sb-item sb-active" if is_active else "sb-item"
+                prefix = "\u25B8 " if is_active else ""
+                label = f"{prefix}{entry['company']}  {star_str}"
                 if st.button(
-                    entry["company"],
+                    label,
                     key=f"view_{i}",
                     use_container_width=True,
                 ):
@@ -1227,6 +1448,10 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
+    # ── Stats bar ────────────────────────────────────────────
+    if st.session_state.brief_history:
+        _render_stats_bar(st.session_state.brief_history)
+
     # ── Config ───────────────────────────────────────────────
     config = load_config()
     if not config.agent_id or not config.env_id or not config.api_key:
@@ -1234,6 +1459,76 @@ def main() -> None:
             "Missing config. Set ANTHROPIC_API_KEY, ALKIRA_AGENT_ID, "
             "and ALKIRA_ENV_ID in .env or Streamlit secrets."
         )
+        return
+
+    # ── Update trigger (re-research) ────────────────────────
+    update_company = st.session_state.pop("_update_company", None)
+    if update_company:
+        st.session_state.pop("viewing_brief", None)
+
+        # Find and remove old brief from history
+        old_id = ""
+        old_idx = None
+        for idx_u, entry_u in enumerate(st.session_state.brief_history):
+            if entry_u.get("company", "").lower() == update_company.lower():
+                old_id = entry_u.get("id", "")
+                old_idx = idx_u
+                break
+
+        tracker_ph = st.empty()
+
+        def update_status(phase: str) -> None:
+            tracker_ph.markdown(
+                render_step_tracker(phase),
+                unsafe_allow_html=True,
+            )
+
+        start = time.time()
+        try:
+            with st.spinner(""):
+                raw = run_agent_session(
+                    config, update_company, update_status,
+                )
+
+            elapsed = time.time() - start
+            tracker_ph.empty()
+
+            brief_md = clean_brief(raw)
+            score, _ = extract_score(brief_md)
+            company_name_clean, _ = extract_company_header(brief_md)
+            if not company_name_clean:
+                company_name_clean = update_company
+
+            saved = db.replace_brief(old_id, user_email, company_name_clean, score, brief_md)
+            brief_id = saved.get("id", "") if saved else ""
+            created_at = saved.get("created_at", "") if saved else ""
+
+            try:
+                dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                display_time = dt.strftime("%b %d, %I:%M %p")
+            except (ValueError, AttributeError):
+                display_time = time.strftime("%b %d, %I:%M %p")
+
+            # Remove old entry, add new at top
+            if old_idx is not None:
+                st.session_state.brief_history.pop(old_idx)
+            st.session_state.brief_history.insert(0, {
+                "id": brief_id,
+                "company": company_name_clean,
+                "brief_md": brief_md,
+                "score": score,
+                "time": display_time,
+            })
+            st.session_state["viewing_brief"] = 0
+
+            render_brief_display(brief_md, meta_right=f"Updated in {elapsed:.0f}s")
+
+        except TimeoutError:
+            tracker_ph.empty()
+            st.error("Timed out after 5 minutes. Try again.")
+        except Exception as exc:
+            tracker_ph.empty()
+            st.error(f"Something went wrong: {exc}")
         return
 
     # ── Search bar ───────────────────────────────────────────
@@ -1330,28 +1625,37 @@ def main() -> None:
             entry = st.session_state.brief_history[idx]
             brief_md = entry.get("brief_md", "")
             if brief_md:
-                render_brief_display(brief_md, meta_right=entry.get("time", ""))
+                render_brief_display(
+                    brief_md,
+                    meta_right=entry.get("time", ""),
+                    show_update=True,
+                )
 
-    # ── How it works ─────────────────────────────────────────
-    with st.expander("How it works"):
-        st.markdown(
-            '<div class="hiw-grid">'
-            '<div class="hiw-card"><div class="hiw-num">1</div>'
-            '<p class="hiw-label">Enter</p>'
-            '<p class="hiw-desc">Type any company name</p></div>'
-            '<div class="hiw-card"><div class="hiw-num">2</div>'
-            '<p class="hiw-label">Research</p>'
-            '<p class="hiw-desc">Agent searches the web</p></div>'
-            '<div class="hiw-card"><div class="hiw-num">3</div>'
-            '<p class="hiw-label">Score</p>'
-            '<p class="hiw-desc">Maps to Alkira fit 1-5</p></div>'
-            '<div class="hiw-card"><div class="hiw-num">4</div>'
-            '<p class="hiw-label">Brief</p>'
-            '<p class="hiw-desc">Proof points + questions</p></div>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-        st.caption("Briefs take 2-4 minutes.")
+    # ── Home: dashboard cards or empty state ─────────────────
+    else:
+        _render_dashboard_cards(st.session_state.brief_history)
+
+        # "How it works" only for first-time users
+        if not st.session_state.brief_history:
+            with st.expander("How it works", expanded=True):
+                st.markdown(
+                    '<div class="hiw-grid">'
+                    '<div class="hiw-card"><div class="hiw-num">1</div>'
+                    '<p class="hiw-label">Enter</p>'
+                    '<p class="hiw-desc">Type any company name</p></div>'
+                    '<div class="hiw-card"><div class="hiw-num">2</div>'
+                    '<p class="hiw-label">Research</p>'
+                    '<p class="hiw-desc">Agent searches the web</p></div>'
+                    '<div class="hiw-card"><div class="hiw-num">3</div>'
+                    '<p class="hiw-label">Score</p>'
+                    '<p class="hiw-desc">Maps to Alkira fit 1-5</p></div>'
+                    '<div class="hiw-card"><div class="hiw-num">4</div>'
+                    '<p class="hiw-label">Brief</p>'
+                    '<p class="hiw-desc">Proof points + questions</p></div>'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
+                st.caption("Briefs take 2-4 minutes.")
 
 
 if __name__ == "__main__":
