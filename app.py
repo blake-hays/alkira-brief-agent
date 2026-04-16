@@ -978,11 +978,10 @@ CUSTOM_CSS = """
         margin: 0;
     }
 
-    /* ── Update button ────────────────────────────── */
-    .update-row {
-        display: flex;
-        justify-content: flex-end;
-        margin-bottom: 0.75rem;
+    /* ── Update button (flush under result card) ──── */
+    .result-card + div .stButton > button {
+        border-radius: 0 0 14px 14px !important;
+        margin-top: -1rem;
     }
 
     /* ── Welcome screen ──────────────────────────── */
@@ -1274,14 +1273,6 @@ def render_brief_display(
     score, reasoning = extract_score(brief_md)
     company, stats_line = extract_company_header(brief_md)
 
-    # Update button
-    if show_update and company:
-        _, btn_col = st.columns([4, 1])
-        with btn_col:
-            if st.button("Update Brief", key="update_brief", use_container_width=True):
-                st.session_state["_update_company"] = company
-                st.rerun()
-
     # Stats pills
     stat_pills = ""
     if stats_line:
@@ -1301,8 +1292,9 @@ def render_brief_display(
     )
 
     # Results card
+    card_radius = "14px 14px 0 0" if show_update else "14px"
     st.markdown(
-        f'<div class="result-card">'
+        f'<div class="result-card" style="border-radius:{card_radius};">'
         f'<div class="result-top">'
         f'<div>'
         f'<p class="result-company">{company or "Brief"}</p>'
@@ -1318,6 +1310,12 @@ def render_brief_display(
         f'</div>',
         unsafe_allow_html=True,
     )
+
+    # Update button (flush under card)
+    if show_update and company:
+        if st.button("Update Brief", key="update_brief", use_container_width=True):
+            st.session_state["_update_company"] = company
+            st.rerun()
 
     # Tabs
     tab_brief, tab_sales, tab_refs = st.tabs([
