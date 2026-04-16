@@ -979,9 +979,12 @@ CUSTOM_CSS = """
     }
 
     /* ── Update button (flush under result card) ──── */
-    .result-card + div .stButton > button {
+    .update-btn-wrap {
+        margin-top: -1.1rem;
+    }
+    .update-btn-wrap + div .stButton > button,
+    .update-btn-wrap ~ div .stButton > button {
         border-radius: 0 0 14px 14px !important;
-        margin-top: -1rem;
     }
 
     /* ── Welcome screen ──────────────────────────── */
@@ -1313,6 +1316,7 @@ def render_brief_display(
 
     # Update button (flush under card)
     if show_update and company:
+        st.markdown('<div class="update-btn-wrap"></div>', unsafe_allow_html=True)
         if st.button("Update Brief", key="update_brief", use_container_width=True):
             st.session_state["_update_company"] = company
             st.rerun()
