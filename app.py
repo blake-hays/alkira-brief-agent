@@ -1057,6 +1057,7 @@ def main() -> None:
         st.session_state.brief_history = []
 
     user_email = st.session_state["user_email"]
+    db_connected = db.is_available()
 
     # ── Sidebar ──────────────────────────────────────────────
     with st.sidebar:
@@ -1069,6 +1070,10 @@ def main() -> None:
             f"</div>",
             unsafe_allow_html=True,
         )
+
+        # DB status
+        if not db_connected:
+            st.warning("Database not connected. Briefs won't persist across sessions.", icon="⚠️")
 
         st.markdown('<p class="sb-title">Your Briefs</p>', unsafe_allow_html=True)
 
