@@ -1287,7 +1287,7 @@ def render_brief_display(
     )
 
     # Results card
-    card_radius = "14px 14px 0 0" if show_update else "14px"
+    card_radius = "14px"
     st.markdown(
         f'<div class="result-card" style="border-radius:{card_radius};">'
         f'<div class="result-top">'
@@ -1306,26 +1306,11 @@ def render_brief_display(
         unsafe_allow_html=True,
     )
 
-    # Update button (flush under card)
+    # Update button
     if show_update and company:
-        update_container = st.container()
-        update_container.markdown(
-            """<style>
-            .update-flush .stButton {
-                margin-top: -1.05rem;
-            }
-            .update-flush .stButton > button {
-                border-radius: 0 0 14px 14px !important;
-                border-top: none !important;
-            }
-            </style>
-            <div class="update-flush"></div>""",
-            unsafe_allow_html=True,
-        )
-        with update_container:
-            if st.button("Update Brief", key="update_brief", use_container_width=True):
-                st.session_state["_update_company"] = company
-                st.rerun()
+        if st.button("Update Brief", key="update_brief", use_container_width=True):
+            st.session_state["_update_company"] = company
+            st.rerun()
 
     # Tabs
     tab_brief, tab_sales, tab_refs = st.tabs([
