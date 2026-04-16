@@ -777,24 +777,24 @@ CUSTOM_CSS = """
         transition: background 0.1s ease;
         cursor: default;
     }
-    /* Sidebar open buttons — small, subtle */
+    /* Sidebar brief cards (buttons styled as cards) */
     [data-testid="stSidebar"] .stButton > button {
-        background: transparent !important;
-        color: #64748b !important;
+        background: #fff !important;
+        color: #1e293b !important;
         border: 1px solid #e2e8f0 !important;
-        border-radius: 5px !important;
-        padding: 0.15rem 0.5rem !important;
-        font-size: 0.62rem !important;
-        font-weight: 500 !important;
-        margin-top: -0.25rem;
-        margin-bottom: 0.5rem;
-        transition: all 0.1s ease;
+        border-radius: 8px !important;
+        padding: 0.6rem 0.7rem !important;
+        font-size: 0.78rem !important;
+        font-weight: 600 !important;
+        text-align: left !important;
+        margin-bottom: 0.35rem;
+        transition: all 0.12s ease;
+        cursor: pointer;
     }
     [data-testid="stSidebar"] .stButton > button:hover {
-        background: #f1f5f9 !important;
-        color: #1a3a6b !important;
-        border-color: #1a3a6b !important;
-        box-shadow: none !important;
+        background: #f8fafc !important;
+        border-color: #93c5fd !important;
+        box-shadow: 0 1px 4px rgba(26,58,107,0.08) !important;
         transform: none !important;
     }
     .sb-company {
@@ -1198,17 +1198,8 @@ def main() -> None:
                 stars_html = "&#9733;" * s + "&#9734;" * (5 - s)
                 is_active = st.session_state.get("viewing_brief") == i
                 active_cls = "sb-item sb-active" if is_active else "sb-item"
-                st.markdown(
-                    f'<div class="{active_cls}">'
-                    f'<span class="sb-company">{entry["company"]}</span>'
-                    f'<div class="sb-right">'
-                    f'<span class="sb-stars">{stars_html}</span>'
-                    f'<span class="sb-time">{entry.get("time", "")}</span>'
-                    f'</div></div>',
-                    unsafe_allow_html=True,
-                )
                 if st.button(
-                    "Open",
+                    entry["company"],
                     key=f"view_{i}",
                     use_container_width=True,
                 ):
