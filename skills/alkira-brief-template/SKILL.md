@@ -7,7 +7,7 @@ description: "Brief template, scoring rubric, and output format for the Alkira O
 
 Load this skill before composing a brief.
 
-**THE BRIEF MUST FIT ON TWO PRINTED PAGES.** That means ~800 words of content (excluding references). Every section below has a sentence limit. Do not exceed it. If you write a sentence that doesn't add new information, delete it.
+**THE BRIEF MUST FIT ON TWO PRINTED PAGES.** That means ~700 words of content (excluding references). Every section below has a sentence limit. Do not exceed it. If you write a sentence that doesn't add new information, delete it.
 
 ---
 
@@ -34,7 +34,7 @@ Find all of the following. Mark findings as **(confirmed)** or **(directional)**
 **Alkira Fit Score: [X] / 5**
 ```
 
-Then **exactly 2 sentences** explaining why. Not 3.
+Then **3-4 sentences** explaining why. This is the most important paragraph in the brief. A partner reads this and decides whether to pursue. Cover: the strongest evidence for Alkira fit, the primary complexity source, and what holds the score back (if anything). Be specific — reference actual findings from research.
 
 **5** — Multiple entry points with direct evidence. Active infrastructure modernization.
 **4** — 2+ entry points with evidence. Cloud-forward but pain inferred, not stated.
@@ -62,22 +62,19 @@ Then **exactly 2 sentences** explaining why. Not 3.
 One line. No paragraph.
 
 ### 3. Fit Score
-Score line + 2 sentences. See above.
+Score line + 3-4 sentence rationale. See above. This replaces the executive summary — make it count.
 
-### 4. Executive Summary — MAX 5 BULLETS, 1 SENTENCE EACH
-Each bullet is one sentence. No bullet exceeds 25 words. A partner reads only this and decides whether to pursue. Cover: fit assessment, scale, primary complexity source.
-
-### 5. Infrastructure Snapshot — MAX 8 SENTENCES TOTAL
+### 4. Infrastructure Snapshot — MAX 8 SENTENCES TOTAL
 Single consolidated section. Cover:
 - Cloud platforms with (confirmed)/(directional) tags — 1-2 sentences
 - On-prem/hybrid platforms — 1 sentence
 - Deployment model — 1 sentence
 - What this means for connectivity and governance — 2 sentences max
 
-### 6. Signals & Timing — MAX 4 BULLETS, 1 SENTENCE EACH
-Combines organisational signals and timing triggers into one section. Only signals that create urgency or affect networking decisions. Each bullet is 1 sentence.
+### 5. Signals & Timing — MAX 4 BULLETS, 1 SENTENCE EACH
+Only signals that create urgency or affect networking decisions. Each bullet is 1 sentence.
 
-### 7. Three Alkira Entry Points — MAX 3 SENTENCES PER ENTRY POINT
+### 6. Three Alkira Entry Points — MAX 3 SENTENCES PER ENTRY POINT
 For each of the 3 entry points, bold subheading, then exactly 3 sentences:
 1. **Signal**: What you found in research that supports this. (1 sentence)
 2. **Solution**: How Alkira addresses it. (1 sentence)
@@ -85,30 +82,47 @@ For each of the 3 entry points, bold subheading, then exactly 3 sentences:
 
 That's 9 sentences total for this section. Not 12. Not 15. Nine.
 
-### 8. Partner Playbook — MAX 12 SENTENCES TOTAL
-Combines entry points, sales questions, and discovery into one actionable section:
+### 7. Conversation Starters
+
+This is the most actionable section. It's written for **partner sales reps who are NOT network engineers**. They need questions they can ask comfortably in a business meeting without sounding like they're running a technical audit.
 
 **Stakeholders:** 3-5 role titles on one line.
-**Opening angle:** 1 sentence.
 
-**5 Sales Questions:** Each question is 1 sentence with a short parenthetical angle note. No multi-sentence setups. Example:
+**5 Questions:** Each question must follow these rules:
+
+1. **Use plain business language.** No technical jargon. No mention of "segmentation," "east-west traffic," "VPC," "policy enforcement," or "network architecture." If a non-technical sales rep would hesitate to say it out loud, rewrite it.
+
+2. **Reference a specific fact about the company.** A name, a number, an event, an acquisition, a quote. This shows the rep did their homework.
+
+3. **Sound like a curious human, not an auditor.** The question should feel like something you'd ask over coffee. "How's that going?" beats "What is your current approach to managing..."
+
+4. **Keep it to one sentence.** Short sentences are easier to memorize and say naturally.
+
+5. **Include a parenthetical that explains:** (a) what the question is really trying to uncover, and (b) what the Alkira angle is if the answer confirms the pain. Write this for the rep — it's their cheat sheet for what to listen for.
+
+**Example of GOOD questions:**
 ```
-1. "Your IT director said legacy customization made it hard to move fast — is that still true for the network layer?" *(Opens infra modernization conversation)*
+1. "How's the Jetro integration going on the IT side?" 
+   *(You're listening for: timeline pressure, overlapping systems, manual work. If it's painful, Alkira cuts partner onboarding time by 98%.)*
+
+2. "Your CIO said stitching clouds together is hard — is that getting better or worse?"
+   *(You're listening for: frustration with multi-cloud complexity. Alkira connects clouds in a single click with 96% faster connection time.)*
+
+3. "With four new distribution centers opening this year, how does a new site get connected?"
+   *(You're listening for: slow provisioning, circuit lead times, manual config. Alkira deploys connectivity 80% faster with no hardware.)*
 ```
 
-**Validate early:** 3 bullets, 1 sentence each.
+**Example of BAD questions (do NOT write these):**
+- "How are you managing network policy and segmentation across both environments today?" *(Too technical — rep won't ask this)*
+- "What does cross-cloud connectivity look like for your SAGE platform?" *(Assumes knowledge of Alkira's value prop)*
+- "Is network infrastructure in scope on the CIO's roadmap alongside application migration?" *(Sounds like a consultant, not a human)*
 
-### 9. Confidence & Gaps — MAX 6 SENTENCES
-- Confidence: High/Medium/Low + 1 sentence why.
-- 2-3 key unknowns as a comma-separated list in 1 sentence.
-- 2 discovery questions in 2 sentences.
+**Validate early:** 2-3 bullets. Plain language. What the rep should try to confirm in the first conversation. Example: "Find out if they're still paying for old MPLS lines" not "Determine the current WAN architecture composition."
 
-This section is 4-6 sentences. Not a full page. Be blunt.
-
-### 10. References
+### 8. References
 Numbered list. Format: `[N] Description — URL`. Short descriptions.
 
-### 11. Confidentiality
+### 9. Confidentiality
 ```
 *CONFIDENTIAL*
 ```
@@ -119,12 +133,14 @@ Numbered list. Format: `[N] Description — URL`. Short descriptions.
 
 Before delivering:
 
-- [ ] Total brief fits on ~2 printed pages (~800 words excluding references)
-- [ ] Executive Summary bullets are 1 sentence each
+- [ ] Total brief fits on ~2 printed pages (~700 words excluding references)
+- [ ] Fit score rationale is 3-4 sentences and answers "should I pursue this?"
 - [ ] No section exceeds its sentence limit
 - [ ] Each Alkira entry point is exactly 3 sentences
-- [ ] Sales questions are 1 sentence each
-- [ ] Confidence & Gaps is under 6 sentences
+- [ ] Sales questions use plain business language — no networking jargon
+- [ ] A non-technical sales rep could read every question out loud comfortably
 - [ ] Every claim labeled (confirmed) or (directional)
 - [ ] No AI writing patterns (check stop-slop skill)
 - [ ] No em dashes, no adverbs, no filler
+- [ ] No "Executive Summary" section (the fit score rationale serves this purpose)
+- [ ] No "Confidence & Gaps" section (confirmed/directional labels handle this inline)

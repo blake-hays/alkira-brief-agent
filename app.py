@@ -201,30 +201,41 @@ def extract_section(brief: str, heading: str) -> str:
 
 
 def extract_exec_snippet(brief_md: str, max_chars: int = 120) -> str:
-    """Pull first meaningful line from Executive Summary for preview cards."""
-    section = extract_section(brief_md, "Executive Summary")
-    if not section:
-        return ""
-    for line in section.split("\n"):
-        stripped = line.strip().lstrip("- *")
-        stripped = re.sub(r"\*\*.*?\*\*", "", stripped).strip()
-        if len(stripped) > 20:
-            if len(stripped) > max_chars:
-                cut = stripped[:max_chars].rsplit(" ", 1)[0]
-                return cut + "..."
-            return stripped
+    """Pull a preview snippet from the score reasoning or first section."""
+    # Try score reasoning first (it's the new exec summary)
+    _, reasoning = extract_score(brief_md)
+    if reasoning and len(reasoning) > 20:
+        if len(reasoning) > max_chars:
+            cut = reasoning[:max_chars].rsplit(" ", 1)[0]
+            return cut + "..."
+        return reasoning
+
+    # Fallback: try Executive Summary (old format) or Infrastructure Snapshot
+    for heading in ["Executive Summary", "Infrastructure Snapshot"]:
+        section = extract_section(brief_md, heading)
+        if not section:
+            continue
+        for line in section.split("\n"):
+            stripped = line.strip().lstrip("- *")
+            stripped = re.sub(r"\*\*.*?\*\*", "", stripped).strip()
+            if len(stripped) > 20:
+                if len(stripped) > max_chars:
+                    cut = stripped[:max_chars].rsplit(" ", 1)[0]
+                    return cut + "..."
+                return stripped
     return ""
 
 
 def get_brief_body(brief: str) -> str:
-    """Get the brief content starting from Executive Summary onward,
+    """Get the brief content starting from the first content section,
     excluding the title, company header, and score (rendered separately)."""
     markers = [
+        "### Infrastructure Snapshot",
         "### Executive Summary",
         "## Executive Summary",
-        "### Infrastructure Snapshot",
         "### Company Snapshot",
         "### Cloud & Infrastructure",
+        "### Signals & Timing",
     ]
     for marker in markers:
         idx = brief.find(marker)
