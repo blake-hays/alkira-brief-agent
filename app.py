@@ -496,19 +496,6 @@ CUSTOM_CSS = """
     .stForm [data-testid="InputInstructions"] {
         display: none !important;
     }
-    .stDownloadButton > button {
-        background: #fff !important;
-        color: #1a3a6b !important;
-        border: 1.5px solid #dde3eb !important;
-        font-weight: 600 !important;
-        font-size: 0.78rem !important;
-        border-radius: 8px !important;
-        padding: 0.45rem 1rem !important;
-    }
-    .stDownloadButton > button:hover {
-        background: #f4f6f9 !important;
-        border-color: #1a3a6b !important;
-    }
 
     /* ── Step tracker ─────────────────────────────── */
     .step-tracker {
@@ -1100,13 +1087,6 @@ def main() -> None:
                     f'</div></div>',
                     unsafe_allow_html=True,
                 )
-                st.download_button(
-                    label="Download",
-                    data=entry.get("brief_md", ""),
-                    file_name=f"{entry['company'].replace(' ', '_')}_Brief.md",
-                    mime="text/markdown",
-                    key=f"sb_{i}",
-                )
 
         # Sign out
         st.markdown("---")
@@ -1217,16 +1197,6 @@ def main() -> None:
                 f'<p class="score-reason">{reasoning}</p>'
                 f'</div>',
                 unsafe_allow_html=True,
-            )
-
-            # ── Download ─────────────────────────────────
-            safe = company_name.strip().replace(" ", "_")
-            st.download_button(
-                label=f"Download {company} Brief",
-                data=brief_md,
-                file_name=f"{safe}_Alkira_Brief.md",
-                mime="text/markdown",
-                key="main_dl",
             )
 
             # ── Tabs ─────────────────────────────────────
