@@ -1400,9 +1400,6 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
-    # ── Stats bar ────────────────────────────────────────────
-    if st.session_state.brief_history:
-        _render_stats_bar(st.session_state.brief_history)
 
     # ── Config ───────────────────────────────────────────────
     config = load_config()
