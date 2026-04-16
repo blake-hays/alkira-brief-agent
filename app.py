@@ -778,6 +778,36 @@ CUSTOM_CSS = """
         cursor: default;
     }
     .sb-item:hover { background: #f1f5f9; }
+    .sb-active {
+        background: #eef2ff !important;
+        border-left: 3px solid #1a3a6b;
+    }
+    /* Compact sidebar view buttons */
+    [data-testid="stSidebar"] .stButton > button {
+        padding: 0.2rem 0.5rem !important;
+        font-size: 0.65rem !important;
+        background: transparent !important;
+        color: #64748b !important;
+        border: 1px solid #dde3eb !important;
+        border-radius: 5px !important;
+        margin-top: -0.3rem;
+        margin-bottom: 0.4rem;
+    }
+    [data-testid="stSidebar"] .stButton > button:hover {
+        background: #f1f5f9 !important;
+        color: #1a3a6b !important;
+        border-color: #1a3a6b !important;
+        box-shadow: none !important;
+    }
+    /* Keep sign-out button styled differently */
+    [data-testid="stSidebar"] [data-testid="stButton"]:last-of-type button {
+        background: #1a3a6b !important;
+        color: white !important;
+        border: none !important;
+        padding: 0.5rem 1rem !important;
+        font-size: 0.78rem !important;
+        margin-top: 0;
+    }
     .sb-company {
         font-size: 0.78rem;
         font-weight: 600;
@@ -1028,6 +1058,105 @@ def _ensure_briefs_loaded() -> None:
     st.session_state._briefs_loaded = True
 
 
+# ── Brief Display ────────────────────────────────────────────────
+
+def render_brief_display(brief_md: str, meta_right: str = "") -> None:
+    """Render a full brief with results card, score, and tabs."""
+    score, reasoning = extract_score(brief_md)
+    company, stats_line = extract_company_header(brief_md)
+
+    # Stats pills
+    stat_pills = ""
+    if stats_line:
+        parts = re.split(r"\s*\|\s*", stats_line.strip("* "))
+        pills = "".join(
+            f'<span class="stat-pill">{p.strip()}</span>'
+            for p in parts if p.strip()
+        )
+        stat_pills = f'<div class="result-stats">{pills}</div>'
+
+    # Score stars
+    filled = ''.join(
+        '<span class="star-on">&#9733;</span>' for _ in range(score)
+    )
+    empty = ''.join(
+        '<span class="star-off">&#9733;</span>' for _ in range(5 - score)
+    )
+
+    # Results card
+    st.markdown(
+        f'<div class="result-card">'
+        f'<div class="result-top">'
+        f'<div>'
+        f'<p class="result-company">{company or "Brief"}</p>'
+        f'{stat_pills}'
+        f'</div>'
+        f'<span class="result-meta">{meta_right}</span>'
+        f'</div>'
+        f'<div class="score-row">'
+        f'<span class="score-stars">{filled}{empty}</span>'
+        f'<span class="score-num">{score}/5</span>'
+        f'</div>'
+        f'<p class="score-reason">{reasoning}</p>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Tabs
+    tab_brief, tab_sales, tab_refs = st.tabs([
+        "Brief", "Sales Playbook", "References",
+    ])
+
+    with tab_brief:
+        body = get_brief_body(brief_md)
+        html = md_to_html(body)
+        st.markdown(
+            f'<div class="brief-doc">{html}</div>',
+            unsafe_allow_html=True,
+        )
+
+    with tab_sales:
+        playbook = extract_section(brief_md, "Partner Playbook")
+        signals = extract_section(brief_md, "Signals & Timing")
+        if not playbook:
+            playbook = extract_section(brief_md, "Strategic Sales Questions")
+        if not signals:
+            signals = extract_section(brief_md, "Why Now")
+
+        content = ""
+        if signals:
+            content += f"### Signals & Timing\n\n{signals}\n\n"
+        if playbook:
+            content += f"### Partner Playbook\n\n{playbook}\n\n"
+
+        if content:
+            html = md_to_html(content)
+            st.markdown(
+                f'<div class="brief-doc">{html}</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.info("Sales sections not found.")
+
+    with tab_refs:
+        refs = extract_section(brief_md, "References")
+        confidence = extract_section(brief_md, "Confidence & Gaps")
+        content = ""
+        if confidence:
+            content += f"### Confidence & Gaps\n\n{confidence}\n\n"
+        if refs:
+            content += f"### References\n\n{refs}\n\n"
+
+        if content:
+            html = md_to_html(content)
+            st.markdown(
+                f'<div class="brief-doc">{html}</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.info("Reference sections not found.")
+
+
 # ── Streamlit UI ─────────────────────────────────────────────────
 
 def main() -> None:
@@ -1078,8 +1207,10 @@ def main() -> None:
             for i, entry in enumerate(st.session_state.brief_history):
                 s = entry.get("score", 0)
                 stars_html = "&#9733;" * s + "&#9734;" * (5 - s)
+                is_active = st.session_state.get("viewing_brief") == i
+                active_cls = "sb-item sb-active" if is_active else "sb-item"
                 st.markdown(
-                    f'<div class="sb-item">'
+                    f'<div class="{active_cls}">'
                     f'<span class="sb-company">{entry["company"]}</span>'
                     f'<div class="sb-right">'
                     f'<span class="sb-stars">{stars_html}</span>'
@@ -1087,6 +1218,13 @@ def main() -> None:
                     f'</div></div>',
                     unsafe_allow_html=True,
                 )
+                if st.button(
+                    f"View {entry['company']}",
+                    key=f"view_{i}",
+                    use_container_width=True,
+                ):
+                    st.session_state["viewing_brief"] = i
+                    st.rerun()
 
         # Sign out
         st.markdown("---")
@@ -1134,6 +1272,7 @@ def main() -> None:
 
     # ── Generation ───────────────────────────────────────────
     if generate and company_name.strip():
+        st.session_state.pop("viewing_brief", None)  # Clear any viewed brief
         form_area.empty()  # Hide form while generating
         tracker_ph = st.empty()
         current_phase = {"value": "init"}
@@ -1162,96 +1301,7 @@ def main() -> None:
             if not company:
                 company = company_name.strip()
 
-            # Parse stats into pills
-            stat_pills = ""
-            if stats_line:
-                parts = re.split(r"\s*\|\s*", stats_line.strip("* "))
-                pills = "".join(
-                    f'<span class="stat-pill">{p.strip()}</span>'
-                    for p in parts if p.strip()
-                )
-                stat_pills = f'<div class="result-stats">{pills}</div>'
-
-            # Score stars
-            filled = ''.join(
-                '<span class="star-on">&#9733;</span>' for _ in range(score)
-            )
-            empty = ''.join(
-                '<span class="star-off">&#9733;</span>' for _ in range(5 - score)
-            )
-
-            # ── Results card ─────────────────────────────
-            st.markdown(
-                f'<div class="result-card">'
-                f'<div class="result-top">'
-                f'<div>'
-                f'<p class="result-company">{company}</p>'
-                f'{stat_pills}'
-                f'</div>'
-                f'<span class="result-meta">Generated in {elapsed:.0f}s</span>'
-                f'</div>'
-                f'<div class="score-row">'
-                f'<span class="score-stars">{filled}{empty}</span>'
-                f'<span class="score-num">{score}/5</span>'
-                f'</div>'
-                f'<p class="score-reason">{reasoning}</p>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
-
-            # ── Tabs ─────────────────────────────────────
-            tab_brief, tab_sales, tab_refs = st.tabs([
-                "Brief", "Sales Playbook", "References",
-            ])
-
-            with tab_brief:
-                body = get_brief_body(brief_md)
-                html = md_to_html(body)
-                st.markdown(
-                    f'<div class="brief-doc">{html}</div>',
-                    unsafe_allow_html=True,
-                )
-
-            with tab_sales:
-                playbook = extract_section(brief_md, "Partner Playbook")
-                signals = extract_section(brief_md, "Signals & Timing")
-                if not playbook:
-                    playbook = extract_section(brief_md, "Strategic Sales Questions")
-                if not signals:
-                    signals = extract_section(brief_md, "Why Now")
-
-                content = ""
-                if signals:
-                    content += f"### Signals & Timing\n\n{signals}\n\n"
-                if playbook:
-                    content += f"### Partner Playbook\n\n{playbook}\n\n"
-
-                if content:
-                    html = md_to_html(content)
-                    st.markdown(
-                        f'<div class="brief-doc">{html}</div>',
-                        unsafe_allow_html=True,
-                    )
-                else:
-                    st.info("Sales sections not found.")
-
-            with tab_refs:
-                refs = extract_section(brief_md, "References")
-                confidence = extract_section(brief_md, "Confidence & Gaps")
-                content = ""
-                if confidence:
-                    content += f"### Confidence & Gaps\n\n{confidence}\n\n"
-                if refs:
-                    content += f"### References\n\n{refs}\n\n"
-
-                if content:
-                    html = md_to_html(content)
-                    st.markdown(
-                        f'<div class="brief-doc">{html}</div>',
-                        unsafe_allow_html=True,
-                    )
-                else:
-                    st.info("Reference sections not found.")
+            render_brief_display(brief_md, meta_right=f"Generated in {elapsed:.0f}s")
 
             # ── Save to DB + session state ───────────────
             saved = db.save_brief(user_email, company, score, brief_md)
@@ -1288,6 +1338,22 @@ def main() -> None:
 
     elif generate:
         st.warning("Enter a company name first.")
+
+    # ── View history brief ───────────────────────────────────
+    elif (
+        not generate
+        and "viewing_brief" in st.session_state
+        and st.session_state.brief_history
+    ):
+        idx = st.session_state["viewing_brief"]
+        if 0 <= idx < len(st.session_state.brief_history):
+            entry = st.session_state.brief_history[idx]
+            brief_md = entry.get("brief_md", "")
+            if brief_md:
+                if st.button("Back to search", key="back_to_search"):
+                    st.session_state.pop("viewing_brief", None)
+                    st.rerun()
+                render_brief_display(brief_md, meta_right=entry.get("time", ""))
 
     # ── How it works ─────────────────────────────────────────
     with st.expander("How it works"):
