@@ -12,10 +12,13 @@ import os
 import re
 import time
 from dataclasses import dataclass
+from datetime import datetime
 
 import streamlit as st
 from anthropic import Anthropic
 from dotenv import load_dotenv
+
+import db
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
@@ -839,6 +842,79 @@ CUSTOM_CSS = """
         margin: 0.15rem 0 0;
         line-height: 1.35;
     }
+
+    /* ── Welcome screen ──────────────────────────── */
+    .welcome-card {
+        background: #fff;
+        border: 1px solid #dde3eb;
+        border-radius: 16px;
+        padding: 2.5rem 2rem;
+        max-width: 420px;
+        margin: 3rem auto;
+        text-align: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+    .welcome-icon {
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(140deg, #0b1a33 0%, #1e3f6e 100%);
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+        color: #fff;
+        margin-bottom: 1rem;
+    }
+    .welcome-title {
+        font-size: 1.25rem;
+        font-weight: 800;
+        color: #0f172a;
+        margin: 0 0 0.3rem;
+        letter-spacing: -0.02em;
+    }
+    .welcome-sub {
+        font-size: 0.82rem;
+        color: #64748b;
+        margin: 0 0 1.5rem;
+        line-height: 1.45;
+    }
+    .welcome-footer {
+        font-size: 0.65rem;
+        color: #94a3b8;
+        margin-top: 1.25rem;
+    }
+
+    /* ── Sidebar user ────────────────────────────── */
+    .sb-user {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.6rem;
+        margin-bottom: 0.75rem;
+        border-bottom: 1px solid #edf0f4;
+        padding-bottom: 0.75rem;
+    }
+    .sb-avatar {
+        width: 28px;
+        height: 28px;
+        background: #1a3a6b;
+        color: #fff;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.7rem;
+        font-weight: 700;
+        flex-shrink: 0;
+    }
+    .sb-email {
+        font-size: 0.72rem;
+        color: #475569;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
 </style>
 """
 
@@ -892,6 +968,72 @@ def render_step_tracker(current_phase: str) -> str:
     return f'<div class="step-tracker">{"".join(parts)}</div>'
 
 
+# ── Welcome Screen ───────────────────────────────────────────────
+
+def _show_welcome() -> None:
+    """Show email entry screen. Blocks the rest of the app via st.stop()."""
+    _, center, _ = st.columns([1, 2, 1])
+    with center:
+        st.markdown(
+            '<div class="welcome-card">'
+            '<div class="welcome-icon">&#9670;</div>'
+            '<p class="welcome-title">Alkira Brief Generator</p>'
+            '<p class="welcome-sub">Enter your email to get started. '
+            "Your briefs will be saved to your account.</p>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+        with st.form("welcome_form", border=False):
+            email = st.text_input(
+                "Email",
+                placeholder="you@company.com",
+                label_visibility="collapsed",
+            )
+            submitted = st.form_submit_button("Continue", use_container_width=True)
+
+        if submitted:
+            email = email.strip()
+            if email and "@" in email and "." in email.split("@")[-1]:
+                st.session_state["user_email"] = email.lower()
+                st.rerun()
+            else:
+                st.error("Enter a valid email address.")
+
+    st.stop()
+
+
+def _ensure_briefs_loaded() -> None:
+    """Load briefs from Supabase once per session."""
+    if st.session_state.get("_briefs_loaded"):
+        return
+
+    email = st.session_state.get("user_email", "")
+    if not email:
+        return
+
+    rows = db.get_user_briefs(email)
+    history = []
+    for row in rows:
+        created = row.get("created_at", "")
+        try:
+            dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
+            display_time = dt.strftime("%b %d, %I:%M %p")
+        except (ValueError, AttributeError):
+            display_time = ""
+
+        history.append({
+            "id": row.get("id", ""),
+            "company": row.get("company", ""),
+            "brief_md": row.get("brief_md", ""),
+            "score": row.get("score", 0),
+            "time": display_time,
+        })
+
+    st.session_state.brief_history = history
+    st.session_state._briefs_loaded = True
+
+
 # ── Streamlit UI ─────────────────────────────────────────────────
 
 def main() -> None:
@@ -903,15 +1045,35 @@ def main() -> None:
 
     st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
+    # ── Auth gate ────────────────────────────────────────────
+    if not st.session_state.get("user_email"):
+        _show_welcome()
+        return  # st.stop() already called inside _show_welcome
+
+    # ── Load briefs from DB ──────────────────────────────────
+    _ensure_briefs_loaded()
+
     if "brief_history" not in st.session_state:
         st.session_state.brief_history = []
 
+    user_email = st.session_state["user_email"]
+
     # ── Sidebar ──────────────────────────────────────────────
     with st.sidebar:
-        st.markdown('<p class="sb-title">History</p>', unsafe_allow_html=True)
+        # User identity
+        initial = user_email[0].upper()
+        st.markdown(
+            f'<div class="sb-user">'
+            f'<div class="sb-avatar">{initial}</div>'
+            f'<span class="sb-email">{user_email}</span>'
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+        st.markdown('<p class="sb-title">Your Briefs</p>', unsafe_allow_html=True)
 
         if not st.session_state.brief_history:
-            st.caption("No briefs yet.")
+            st.caption("No briefs yet. Generate one to get started.")
         else:
             for i, entry in enumerate(st.session_state.brief_history):
                 s = entry.get("score", 0)
@@ -926,12 +1088,19 @@ def main() -> None:
                     unsafe_allow_html=True,
                 )
                 st.download_button(
-                    label=f"Download",
-                    data=entry["brief_md"],
+                    label="Download",
+                    data=entry.get("brief_md", ""),
                     file_name=f"{entry['company'].replace(' ', '_')}_Brief.md",
                     mime="text/markdown",
                     key=f"sb_{i}",
                 )
+
+        # Sign out
+        st.markdown("---")
+        if st.button("Sign out", use_container_width=True, key="signout"):
+            for key in ["user_email", "brief_history", "_briefs_loaded"]:
+                st.session_state.pop(key, None)
+            st.rerun()
 
     # ── Hero ─────────────────────────────────────────────────
     st.markdown(
@@ -1101,15 +1270,30 @@ def main() -> None:
                 else:
                     st.info("Reference sections not found.")
 
-            # ── History ──────────────────────────────────
-            timestamp = time.strftime("%I:%M %p")
+            # ── Save to DB + session state ───────────────
+            saved = db.save_brief(user_email, company, score, brief_md)
+            brief_id = saved.get("id", "") if saved else ""
+            created_at = saved.get("created_at", "") if saved else ""
+
+            try:
+                dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                display_time = dt.strftime("%b %d, %I:%M %p")
+            except (ValueError, AttributeError):
+                display_time = time.strftime("%b %d, %I:%M %p")
+
             st.session_state.brief_history.insert(0, {
+                "id": brief_id,
                 "company": company,
                 "brief_md": brief_md,
                 "score": score,
-                "time": timestamp,
+                "time": display_time,
             })
-            st.session_state.brief_history = st.session_state.brief_history[:10]
+
+            if not saved:
+                st.warning(
+                    "Brief saved locally but could not sync to your account.",
+                    icon="&#9888;",
+                )
 
         except TimeoutError:
             tracker_ph.empty()
