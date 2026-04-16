@@ -25,22 +25,29 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 SKILLS_ROOT = Path(__file__).parent / "skills"
 
+def _versioned_title(base: str) -> str:
+    """Append a timestamp to the title so the Skills API accepts re-uploads."""
+    from datetime import datetime
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    return f"{base} ({ts})"
+
+
 SKILLS_TO_UPLOAD = [
     {
         "dir": "alkira-customer",
-        "title": "Alkira Customer Knowledge Base",
+        "base_title": "Alkira Customer Knowledge Base",
         "env_key": "ALKIRA_CUSTOMER_SKILL_ID",
-        "legacy_key": "ALKIRA_SKILL_ID",  # from old single-skill setup
+        "legacy_key": "ALKIRA_SKILL_ID",
     },
     {
         "dir": "alkira-brief-template",
-        "title": "Alkira Brief Template and Scoring",
+        "base_title": "Alkira Brief Template and Scoring",
         "env_key": "ALKIRA_BRIEF_TEMPLATE_SKILL_ID",
         "legacy_key": None,
     },
     {
         "dir": "stop-slop",
-        "title": "Stop Slop Writing Quality Filter",
+        "base_title": "Stop Slop Writing Quality Filter",
         "env_key": "STOP_SLOP_SKILL_ID",
         "legacy_key": None,
     },
@@ -115,9 +122,10 @@ def main():
 
     for spec in SKILLS_TO_UPLOAD:
         existing_id = get_existing_id(spec)
+        base_title = spec["base_title"]
 
         if existing_id and not force:
-            print(f"  '{spec['title']}' — reusing existing ID: {existing_id}")
+            print(f"  '{base_title}' — reusing existing ID: {existing_id}")
             print(f"    (run with --force to re-upload)\n")
             uploaded.append(UploadedSkill(
                 name=spec["dir"],
@@ -126,8 +134,11 @@ def main():
             ))
             continue
 
+        # Use versioned title to avoid "duplicate display_title" errors
+        title = _versioned_title(base_title) if force else base_title
+
         try:
-            skill_id = upload_skill(client, spec["dir"], spec["title"])
+            skill_id = upload_skill(client, spec["dir"], title)
             print(f"  Skill ID: {skill_id}\n")
             uploaded.append(UploadedSkill(
                 name=spec["dir"],
@@ -136,18 +147,16 @@ def main():
             ))
         except Exception as exc:
             if "reuse an existing display_title" in str(exc):
-                print(f"  '{spec['title']}' already exists on the server.")
-                if existing_id:
-                    print(f"  Reusing ID from .env: {existing_id}\n")
-                    uploaded.append(UploadedSkill(
-                        name=spec["dir"],
-                        skill_id=existing_id,
-                        env_key=spec["env_key"],
-                    ))
-                else:
-                    print(f"  ERROR: No existing ID in .env. Delete the skill")
-                    print(f"  on the Anthropic dashboard and re-run, or add")
-                    print(f"  {spec['env_key']}=<id> to .env manually.\n")
+                # Retry with versioned title
+                title = _versioned_title(base_title)
+                print(f"  Title conflict. Retrying as '{title}'...")
+                skill_id = upload_skill(client, spec["dir"], title)
+                print(f"  Skill ID: {skill_id}\n")
+                uploaded.append(UploadedSkill(
+                    name=spec["dir"],
+                    skill_id=skill_id,
+                    env_key=spec["env_key"],
+                ))
             else:
                 raise
 
