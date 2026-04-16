@@ -643,25 +643,6 @@ CUSTOM_CSS = """
         margin-top: 0.4rem;
     }
 
-    /* ── Tabs ─────────────────────────────────────── */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 2px;
-        background: #edf0f4;
-        border-radius: 10px;
-        padding: 3px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        font-size: 0.75rem;
-        font-weight: 600;
-        padding: 0.45rem 1rem;
-        border-radius: 8px;
-        color: #64748b;
-    }
-    .stTabs [aria-selected="true"] {
-        background: #fff !important;
-        color: #0f172a !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-    }
 
     /* ── Brief document ──────────────────────────── */
     .brief-doc {
@@ -1312,59 +1293,13 @@ def render_brief_display(
             st.session_state["_update_company"] = company
             st.rerun()
 
-    # Tabs
-    tab_brief, tab_sales, tab_refs = st.tabs([
-        "Brief", "Sales Playbook", "References",
-    ])
-
-    with tab_brief:
-        body = get_brief_body(brief_md)
-        html = md_to_html(body)
-        st.markdown(
-            f'<div class="brief-doc">{html}</div>',
-            unsafe_allow_html=True,
-        )
-
-    with tab_sales:
-        playbook = extract_section(brief_md, "Partner Playbook")
-        signals = extract_section(brief_md, "Signals & Timing")
-        if not playbook:
-            playbook = extract_section(brief_md, "Strategic Sales Questions")
-        if not signals:
-            signals = extract_section(brief_md, "Why Now")
-
-        content = ""
-        if signals:
-            content += f"### Signals & Timing\n\n{signals}\n\n"
-        if playbook:
-            content += f"### Partner Playbook\n\n{playbook}\n\n"
-
-        if content:
-            html = md_to_html(content)
-            st.markdown(
-                f'<div class="brief-doc">{html}</div>',
-                unsafe_allow_html=True,
-            )
-        else:
-            st.info("Sales sections not found.")
-
-    with tab_refs:
-        refs = extract_section(brief_md, "References")
-        confidence = extract_section(brief_md, "Confidence & Gaps")
-        content = ""
-        if confidence:
-            content += f"### Confidence & Gaps\n\n{confidence}\n\n"
-        if refs:
-            content += f"### References\n\n{refs}\n\n"
-
-        if content:
-            html = md_to_html(content)
-            st.markdown(
-                f'<div class="brief-doc">{html}</div>',
-                unsafe_allow_html=True,
-            )
-        else:
-            st.info("Reference sections not found.")
+    # Full brief as single scrollable document
+    body = get_brief_body(brief_md)
+    html = md_to_html(body)
+    st.markdown(
+        f'<div class="brief-doc">{html}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 # ── Streamlit UI ─────────────────────────────────────────────────
