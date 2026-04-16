@@ -914,15 +914,9 @@ CUSTOM_CSS = """
     .dash-card {
         background: #fff;
         border: 1px solid #e2e8f0;
-        border-radius: 10px;
+        border-radius: 10px 10px 0 0;
         padding: 0.9rem 1rem;
-        margin-bottom: 0.15rem;
-        transition: all 0.12s ease;
-        cursor: pointer;
-    }
-    .dash-card:hover {
-        border-color: #93c5fd;
-        box-shadow: 0 2px 8px rgba(26,58,107,0.06);
+        min-height: 130px;
     }
     .dash-top {
         display: flex;
@@ -947,11 +941,21 @@ CUSTOM_CSS = """
         color: #64748b;
         line-height: 1.4;
         margin: 0;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
     }
     .dash-date {
         font-size: 0.6rem;
         color: #94a3b8;
         margin: 0.3rem 0 0;
+    }
+    /* Dashboard open buttons — attached to card bottom */
+    [data-testid="stMainBlockContainer"] .stColumn .stButton > button {
+        border-radius: 0 0 10px 10px !important;
+        margin-top: -1px;
+        border-top: none !important;
     }
 
     /* ── Empty state ──────────────────────────────── */
