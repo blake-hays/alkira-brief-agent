@@ -376,8 +376,7 @@ CUSTOM_CSS = """
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         background: #f4f6f9;
     }
-    .stDeployButton, #MainMenu, footer,
-    header[data-testid="stHeader"] { display: none !important; }
+    .stDeployButton, #MainMenu, footer { display: none !important; }
     .stSpinner, div[data-testid="stSpinner"] { display: none !important; }
 
     .block-container {
@@ -1041,6 +1040,7 @@ def main() -> None:
         page_title="Alkira Brief Generator",
         page_icon="https://alkira.com/favicon.ico",
         layout="centered",
+        initial_sidebar_state="expanded",
     )
 
     st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
