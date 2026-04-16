@@ -1421,7 +1421,12 @@ def main() -> None:
         if not st.session_state.brief_history:
             st.caption("No briefs yet. Generate one to get started.")
         else:
-            for i, entry in enumerate(st.session_state.brief_history):
+            sorted_briefs = sorted(
+                enumerate(st.session_state.brief_history),
+                key=lambda x: x[1].get("score", 0),
+                reverse=True,
+            )
+            for i, entry in sorted_briefs:
                 s = entry.get("score", 0)
                 star_str = "\u2605" * s + "\u2606" * (5 - s)
                 is_active = st.session_state.get("viewing_brief") == i
