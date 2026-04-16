@@ -777,37 +777,25 @@ CUSTOM_CSS = """
         transition: background 0.1s ease;
         cursor: default;
     }
-    /* Sidebar brief buttons styled as cards */
+    /* Sidebar open buttons — small, subtle */
     [data-testid="stSidebar"] .stButton > button {
-        background: #fff !important;
-        color: #1e293b !important;
+        background: transparent !important;
+        color: #64748b !important;
         border: 1px solid #e2e8f0 !important;
-        border-radius: 8px !important;
-        padding: 0.55rem 0.7rem !important;
-        font-size: 0.78rem !important;
-        font-weight: 600 !important;
-        text-align: left !important;
-        margin-bottom: 0.3rem;
-        transition: all 0.15s ease;
+        border-radius: 5px !important;
+        padding: 0.15rem 0.5rem !important;
+        font-size: 0.62rem !important;
+        font-weight: 500 !important;
+        margin-top: -0.25rem;
+        margin-bottom: 0.5rem;
+        transition: all 0.1s ease;
     }
     [data-testid="stSidebar"] .stButton > button:hover {
-        background: #f8fafc !important;
+        background: #f1f5f9 !important;
+        color: #1a3a6b !important;
         border-color: #1a3a6b !important;
         box-shadow: none !important;
         transform: none !important;
-    }
-    /* Sign-out button at bottom */
-    [data-testid="stSidebar"] [key="signout"] button,
-    [data-testid="stSidebar"] .stButton:last-of-type > button {
-        background: transparent !important;
-        color: #94a3b8 !important;
-        border: 1px solid #e2e8f0 !important;
-        font-size: 0.7rem !important;
-        font-weight: 500 !important;
-        padding: 0.4rem 0.8rem !important;
-    }
-    [data-testid="stSidebar"] .stButton:last-of-type > button:hover {
-        color: #1e293b !important;
     }
     .sb-company {
         font-size: 0.78rem;
@@ -1210,11 +1198,19 @@ def main() -> None:
                 stars_html = "&#9733;" * s + "&#9734;" * (5 - s)
                 is_active = st.session_state.get("viewing_brief") == i
                 active_cls = "sb-item sb-active" if is_active else "sb-item"
+                st.markdown(
+                    f'<div class="{active_cls}">'
+                    f'<span class="sb-company">{entry["company"]}</span>'
+                    f'<div class="sb-right">'
+                    f'<span class="sb-stars">{stars_html}</span>'
+                    f'<span class="sb-time">{entry.get("time", "")}</span>'
+                    f'</div></div>',
+                    unsafe_allow_html=True,
+                )
                 if st.button(
-                    entry["company"],
+                    "Open",
                     key=f"view_{i}",
                     use_container_width=True,
-                    help=f"{s}/5 stars — {entry.get('time', '')}",
                 ):
                     st.session_state["viewing_brief"] = i
                     st.rerun()
