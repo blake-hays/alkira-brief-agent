@@ -777,36 +777,37 @@ CUSTOM_CSS = """
         transition: background 0.1s ease;
         cursor: default;
     }
-    .sb-item:hover { background: #f1f5f9; }
-    .sb-active {
-        background: #eef2ff !important;
-        border-left: 3px solid #1a3a6b;
-    }
-    /* Compact sidebar view buttons */
+    /* Sidebar brief buttons styled as cards */
     [data-testid="stSidebar"] .stButton > button {
-        padding: 0.2rem 0.5rem !important;
-        font-size: 0.65rem !important;
-        background: transparent !important;
-        color: #64748b !important;
-        border: 1px solid #dde3eb !important;
-        border-radius: 5px !important;
-        margin-top: -0.3rem;
-        margin-bottom: 0.4rem;
+        background: #fff !important;
+        color: #1e293b !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 8px !important;
+        padding: 0.55rem 0.7rem !important;
+        font-size: 0.78rem !important;
+        font-weight: 600 !important;
+        text-align: left !important;
+        margin-bottom: 0.3rem;
+        transition: all 0.15s ease;
     }
     [data-testid="stSidebar"] .stButton > button:hover {
-        background: #f1f5f9 !important;
-        color: #1a3a6b !important;
+        background: #f8fafc !important;
         border-color: #1a3a6b !important;
         box-shadow: none !important;
+        transform: none !important;
     }
-    /* Keep sign-out button styled differently */
-    [data-testid="stSidebar"] [data-testid="stButton"]:last-of-type button {
-        background: #1a3a6b !important;
-        color: white !important;
-        border: none !important;
-        padding: 0.5rem 1rem !important;
-        font-size: 0.78rem !important;
-        margin-top: 0;
+    /* Sign-out button at bottom */
+    [data-testid="stSidebar"] [key="signout"] button,
+    [data-testid="stSidebar"] .stButton:last-of-type > button {
+        background: transparent !important;
+        color: #94a3b8 !important;
+        border: 1px solid #e2e8f0 !important;
+        font-size: 0.7rem !important;
+        font-weight: 500 !important;
+        padding: 0.4rem 0.8rem !important;
+    }
+    [data-testid="stSidebar"] .stButton:last-of-type > button:hover {
+        color: #1e293b !important;
     }
     .sb-company {
         font-size: 0.78rem;
@@ -1209,19 +1210,11 @@ def main() -> None:
                 stars_html = "&#9733;" * s + "&#9734;" * (5 - s)
                 is_active = st.session_state.get("viewing_brief") == i
                 active_cls = "sb-item sb-active" if is_active else "sb-item"
-                st.markdown(
-                    f'<div class="{active_cls}">'
-                    f'<span class="sb-company">{entry["company"]}</span>'
-                    f'<div class="sb-right">'
-                    f'<span class="sb-stars">{stars_html}</span>'
-                    f'<span class="sb-time">{entry.get("time", "")}</span>'
-                    f'</div></div>',
-                    unsafe_allow_html=True,
-                )
                 if st.button(
-                    f"View {entry['company']}",
+                    entry["company"],
                     key=f"view_{i}",
                     use_container_width=True,
+                    help=f"{s}/5 stars — {entry.get('time', '')}",
                 ):
                     st.session_state["viewing_brief"] = i
                     st.rerun()
@@ -1350,9 +1343,6 @@ def main() -> None:
             entry = st.session_state.brief_history[idx]
             brief_md = entry.get("brief_md", "")
             if brief_md:
-                if st.button("Back to search", key="back_to_search"):
-                    st.session_state.pop("viewing_brief", None)
-                    st.rerun()
                 render_brief_display(brief_md, meta_right=entry.get("time", ""))
 
     # ── How it works ─────────────────────────────────────────
