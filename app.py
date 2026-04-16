@@ -929,6 +929,10 @@ CUSTOM_CSS = """
         font-weight: 700;
         color: #0f172a;
         margin: 0;
+        display: -webkit-box;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
     }
     .dash-stars {
         font-size: 0.75rem;
