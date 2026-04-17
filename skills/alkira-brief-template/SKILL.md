@@ -65,11 +65,17 @@ One line. No paragraph.
 Score line + 3-4 sentence rationale. See above. This replaces the executive summary — make it count.
 
 ### 4. Infrastructure Snapshot — MAX 8 SENTENCES TOTAL
-Single consolidated section. Cover:
-- Cloud platforms with (confirmed)/(directional) tags — 1-2 sentences
-- On-prem/hybrid platforms — 1 sentence
-- Deployment model — 1 sentence
-- What this means for connectivity and governance — 2 sentences max
+
+**You MUST render this section with bold sub-labels, not as flowing prose.** Use exactly this format:
+
+```
+**Cloud Platforms:** [1-2 sentences with (confirmed)/(directional) tags]
+**On-Prem / Hybrid:** [1 sentence]
+**Deployment Model:** [1 sentence]
+**Resulting Complexity:** [2 sentences max — what this means for connectivity and governance]
+```
+
+The "Resulting Complexity" line is the scannable "so what" — a reader should be able to jump straight to it and understand the opportunity. Do NOT write this section as a single paragraph.
 
 ### 5. Signals & Timing — MAX 4 BULLETS, 1 SENTENCE EACH
 Only signals that create urgency or affect networking decisions. Each bullet is 1 sentence.
@@ -87,6 +93,8 @@ That's 9 sentences total for this section. Not 12. Not 15. Nine.
 This is the most actionable section. It's written for **partner sales reps who are NOT network engineers**. They need questions they can ask comfortably in a business meeting without sounding like they're running a technical audit.
 
 **Stakeholders:** 3-5 role titles on one line.
+
+**Best First Question:** Call out which of the 5 questions below to LEAD with, and in 1 sentence say why. Example: "Lead with question #2 (Jetro integration). It's the biggest budgeted pain and ties directly to a named deal they just announced." This gives the rep one clear starting point instead of 5 equal options.
 
 **5 Questions:** Each question must follow these rules:
 
@@ -135,11 +143,14 @@ Before delivering:
 
 - [ ] Total brief fits on ~2 printed pages (~700 words excluding references)
 - [ ] Fit score rationale is 3-4 sentences and answers "should I pursue this?"
+- [ ] Infrastructure Snapshot uses bold sub-labels (Cloud Platforms, On-Prem/Hybrid, Deployment Model, Resulting Complexity) — NOT a single paragraph
+- [ ] Conversation Starters section includes "Best First Question" guidance
 - [ ] No section exceeds its sentence limit
 - [ ] Each Alkira entry point is exactly 3 sentences
 - [ ] Sales questions use plain business language — no networking jargon
 - [ ] A non-technical sales rep could read every question out loud comfortably
 - [ ] Every claim labeled (confirmed) or (directional)
+- [ ] References include actual clickable URLs, not just titles
 - [ ] No AI writing patterns (check stop-slop skill)
 - [ ] No em dashes, no adverbs, no filler
 - [ ] No "Executive Summary" section (the fit score rationale serves this purpose)
