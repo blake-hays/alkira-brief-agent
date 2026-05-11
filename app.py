@@ -1855,7 +1855,7 @@ def render_brief_bento(
 def _render_download_pdf_button(brief_md: str, company: str, score: int) -> None:
     """Render the Download PDF button. Generates the PDF on-demand."""
     try:
-        from pdf import generate_brief_pdf, build_filename
+        from pdf import generate_brief_pdf, build_filename, PDF_VERSION
     except Exception as exc:
         st.warning(f"PDF generation unavailable: {exc}")
         return
@@ -1864,10 +1864,12 @@ def _render_download_pdf_button(brief_md: str, company: str, score: int) -> None
     period = now.strftime("%Y-%m")
     filename = build_filename(company or "Brief", period)
 
-    # Cache PDF bytes per company in session state to avoid regenerating on every rerun
-    # Include brief content hash so re-research generates a fresh PDF
+    # Include content hash + PDF code version in cache key so:
+    # - re-research generates a fresh PDF (content hash changes)
+    # - shipping new PDF code invalidates all stale cached PDFs (PDF_VERSION changes)
     brief_hash = abs(hash(brief_md)) % (10 ** 8)
-    cache_key = f"_pdf_bytes_{company}_{brief_hash}"
+    cache_key = f"_pdf_bytes_{PDF_VERSION}_{company}_{brief_hash}"
+
     if cache_key not in st.session_state:
         try:
             pdf_bytes = generate_brief_pdf(brief_md, company, score, now)
@@ -1882,7 +1884,7 @@ def _render_download_pdf_button(brief_md: str, company: str, score: int) -> None
         file_name=filename,
         mime="application/pdf",
         use_container_width=True,
-        key=f"download_pdf_{company}_{brief_hash}",
+        key=f"download_pdf_{PDF_VERSION}_{company}_{brief_hash}",
     )
 
 

@@ -11,6 +11,10 @@ from datetime import datetime
 
 from fpdf import FPDF
 
+# Bump this when changing PDF rendering. Streamlit's session-state cache
+# uses it as part of the cache key so a code update invalidates stale PDFs.
+PDF_VERSION = "v2"
+
 # ── Brand palette (RGB tuples for fpdf2) ─────────────────────────
 ALKIRA_BLUE   = (45, 88, 242)    # #2D58F2
 ALKIRA_NAVY   = (10, 31, 68)     # #0A1F44
@@ -236,7 +240,7 @@ def _draw_hero_with_badge(
     # ── Company name (left, leaving room for the badge on row 1) ──
     name_w = badge_x - x_left - 4
     pdf.set_xy(x_left, y_start)
-    pdf.set_font("Helvetica", "B", 22)
+    pdf.set_font("Helvetica", "B", 26)
     pdf.set_text_color(*ALKIRA_INK)
     pdf.cell(
         name_w, 10,
@@ -288,70 +292,49 @@ def _draw_opening_callout(
     question: str,
     listening_for: str,
 ) -> None:
-    """Highlighted callout box for the recommended opening line.
+    """Opening line callout — orange left stripe, no background fill.
 
-    Two-pass render: first measure the actual wrapped line counts with
-    fpdf2's ``dry_run=True, output="LINES"``, then paint the background + stripe to
-    that exact height, then draw the text. This keeps the LISTENING FOR
-    section inside the tinted box regardless of question length.
+    The question is set off by a thick orange vertical rule on the left
+    and generous whitespace, not by a contained box. Content renders
+    first so the stripe can match the actual content height.
     """
     x = 12.7
-    y_top = pdf.get_y()
-    w = 190.5
-    pad = 5.0
-    stripe_w = 2.5
-    inner_w = w - stripe_w - 2 * pad
+    y_start = pdf.get_y()
+    stripe_w = 2.0
+    text_x = x + stripe_w + 6  # 6mm gap after stripe
+    text_w = 215.9 - 12.7 - (text_x - x)  # right margin = 12.7
 
-    q_text = _safe_text(_strip_md(question or ""))
-    lf_text = _safe_text(_strip_md(listening_for or ""))
-
-    # ── Measure (split-only) ────────────────────────────────────
-    pdf.set_font("Helvetica", "B", 11)
-    q_lines = max(1, len(pdf.multi_cell(inner_w, 5, q_text, dry_run=True, output="LINES")))
-
-    lf_lines = 0
-    if lf_text:
-        pdf.set_font("Helvetica", "", 9)
-        lf_lines = max(1, len(pdf.multi_cell(inner_w, 4, lf_text, dry_run=True, output="LINES")))
-
-    # Compose height: pad + OPENING(4) + 1 + (q_lines * 5) + (1 + 3.5 + lf_lines*4 if lf) + pad
-    box_h = pad + 4 + 1 + (q_lines * 5)
-    if lf_text:
-        box_h += 1 + 3.5 + (lf_lines * 4)
-    box_h += pad
-
-    # ── Backgrounds ────────────────────────────────────────────
-    pdf.set_fill_color(245, 248, 255)  # light blue tint
-    pdf.rect(x, y_top, w, box_h, style="F")
-
-    pdf.set_fill_color(*ALKIRA_ORANGE)
-    pdf.rect(x, y_top, stripe_w, box_h, style="F")
-
-    # ── Text ───────────────────────────────────────────────────
-    pdf.set_xy(x + stripe_w + pad, y_top + pad)
+    # OPENING LINE label
+    pdf.set_xy(text_x, y_start)
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_text_color(*ALKIRA_ORANGE)
-    pdf.cell(inner_w, 4, "OPENING LINE", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(text_w, 4, "OPENING LINE")
 
-    pdf.set_xy(x + stripe_w + pad, y_top + pad + 5)
-    pdf.set_font("Helvetica", "B", 11)
+    # Question text — bigger, bolder
+    pdf.set_xy(text_x, y_start + 5)
+    pdf.set_font("Helvetica", "B", 12)
     pdf.set_text_color(*ALKIRA_INK)
-    pdf.multi_cell(inner_w, 5, q_text)
+    pdf.multi_cell(text_w, 5.5, _safe_text(_strip_md(question)))
 
-    if lf_text:
-        pdf.ln(1)
-        pdf.set_x(x + stripe_w + pad)
-        pdf.set_font("Helvetica", "B", 7)
-        pdf.set_text_color(*ALKIRA_BLUE)
-        pdf.cell(inner_w, 3.5, "LISTENING FOR", new_x="LMARGIN", new_y="NEXT")
-        pdf.set_x(x + stripe_w + pad)
-        pdf.set_font("Helvetica", "", 9)
-        pdf.set_text_color(*ALKIRA_INK)
-        pdf.multi_cell(inner_w, 4, lf_text)
+    # Listening for
+    pdf.ln(1)
+    pdf.set_x(text_x)
+    pdf.set_font("Helvetica", "B", 7)
+    pdf.set_text_color(*ALKIRA_BLUE)
+    pdf.cell(text_w, 3.5, "LISTENING FOR")
+    pdf.ln(4)
+    pdf.set_x(text_x)
+    pdf.set_font("Helvetica", "", 9.5)
+    pdf.set_text_color(*ALKIRA_INK)
+    pdf.multi_cell(text_w, 4.2, _safe_text(_strip_md(listening_for)))
 
-    # Advance past the box (use measured height — not cursor position, since
-    # the cursor lands inside the box at end of text)
-    pdf.set_y(y_top + box_h + 3)
+    y_end = pdf.get_y()
+
+    # Now draw the orange stripe — height = actual content height
+    pdf.set_fill_color(*ALKIRA_ORANGE)
+    pdf.rect(x, y_start, stripe_w, y_end - y_start, style="F")
+
+    pdf.ln(5)
 
 
 def _draw_followup_questions(pdf: _BriefPDF, questions: list[dict]) -> None:
@@ -379,6 +362,8 @@ def _draw_followup_questions(pdf: _BriefPDF, questions: list[dict]) -> None:
             pdf.set_text_color(*ALKIRA_MUTED)
             pdf.multi_cell(186, 4, _safe_text("Listening for: " + _strip_md(listening)))
         pdf.ln(1.5)
+
+    pdf.ln(2)  # Extra space before next section
 
 
 def _draw_validate_early(pdf: _BriefPDF, bullets: list[str]) -> None:
@@ -427,53 +412,52 @@ def _draw_infra_grid(
     w: float,
     h: float,
 ) -> None:
-    """Draw the 2x2 infrastructure cell grid.
+    """2-column typography-led infrastructure list (no cell borders, no fills).
 
-    `cells` keys: cloud_platforms, on_prem, deployment, complexity.
-
-    Body text is truncated based on the actual cell dimensions so long
-    Resulting Complexity / Cloud Platforms strings never spill into Signals.
+    Renders as 2 columns x 2 rows. Each cell is just a small caps label in
+    Alkira blue + body text in ink. Subtle vertical hairline between columns
+    for visual separation, no horizontal lines.
     """
-    half_w = w / 2
-    half_h = h / 2
-    items = [
-        ("CLOUD PLATFORMS", cells.get("cloud_platforms", ""), x, y),
-        ("ON-PREM / HYBRID", cells.get("on_prem", ""), x + half_w, y),
-        ("DEPLOYMENT MODEL", cells.get("deployment", ""), x, y + half_h),
-        ("RESULTING COMPLEXITY", cells.get("complexity", ""), x + half_w, y + half_h),
-    ]
-    pad = 3.0
+    col_w = w / 2 - 4  # 4mm gutter between columns
+    col_gap = 8
+    col1_x = x
+    col2_x = x + col_w + col_gap
 
-    # Body starts at cell_y + pad + 4.5 (after label) and ends at cell_y + half_h - pad.
-    # Available height = half_h - 2*pad - 4.5. Line height = 3.6mm at 8pt.
-    # Approx 35 chars/line in (half_w - 6mm) at 8pt Helvetica.
-    available_h = half_h - 2 * pad - 4.5
-    available_lines = max(1, int(available_h / 3.6))
-    cell_chars_per_line = 35
-    max_chars = available_lines * cell_chars_per_line
+    items = [
+        ("CLOUD PLATFORMS", cells.get("cloud_platforms", ""), col1_x, y),
+        ("ON-PREM / HYBRID", cells.get("on_prem", ""), col2_x, y),
+        ("DEPLOYMENT MODEL", cells.get("deployment", ""), col1_x, y + h / 2),
+        ("RESULTING COMPLEXITY", cells.get("complexity", ""), col2_x, y + h / 2),
+    ]
+
+    row_h = h / 2
+    body_h = row_h - 6  # label takes 4-5mm, rest is body
+    available_lines = max(1, int(body_h / 3.6))
+    chars_per_line = 50  # wider than before because each column gets w/2
+    max_chars = available_lines * chars_per_line
 
     for label, body, cx, cy in items:
-        # Cell border
-        pdf.set_draw_color(*ALKIRA_BORDER)
-        pdf.set_line_width(0.2)
-        pdf.set_fill_color(*ALKIRA_WHITE)
-        pdf.rect(cx, cy, half_w, half_h, style="DF")
-
         # Label
-        pdf.set_xy(cx + pad, cy + pad)
+        pdf.set_xy(cx, cy)
         pdf.set_font("Helvetica", "B", 7)
         pdf.set_text_color(*ALKIRA_BLUE)
-        pdf.cell(half_w - 2 * pad, 3.5, label)
+        pdf.cell(col_w, 3.5, label)
 
-        # Body — truncate to fit
+        # Body
         text = _strip_md((body or "—").strip())
         if len(text) > max_chars:
-            text = text[: max_chars - 3].rstrip() + "..."
+            text = text[:max_chars - 3].rstrip() + "..."
 
-        pdf.set_xy(cx + pad, cy + pad + 4.5)
-        pdf.set_font("Helvetica", "", 8)
+        pdf.set_xy(cx, cy + 5)
+        pdf.set_font("Helvetica", "", 9)
         pdf.set_text_color(*ALKIRA_INK)
-        pdf.multi_cell(half_w - 2 * pad, 3.6, _safe_text(text))
+        pdf.multi_cell(col_w, 3.8, _safe_text(text))
+
+    # Subtle vertical hairline between columns (very light gray)
+    mid_x = x + w / 2
+    pdf.set_draw_color(230, 230, 235)
+    pdf.set_line_width(0.15)
+    pdf.line(mid_x, y, mid_x, y + h)
 
 
 # ── Signals & References tiles ──────────────────────────────────
@@ -570,7 +554,7 @@ def _draw_entry_points(pdf: _BriefPDF, points: list[dict]) -> None:
     gap = 3.0
     tile_w = (content_w - 2 * gap) / 3
     tile_h = 95  # was 75 — more room for combined body content
-    pad = 3.5
+    pad = 1.5  # was 3.5 — let content breathe to natural column edges
 
     # Calculate max chars per tile body. Heading takes ~10mm, label ~5mm,
     # leaving ~80mm for body. Line height 3.5mm, ~38 chars/line at 8pt
@@ -582,24 +566,18 @@ def _draw_entry_points(pdf: _BriefPDF, points: list[dict]) -> None:
 
     for i, point in enumerate(points[:3]):
         cx = x + i * (tile_w + gap)
-        # Tile background
-        pdf.set_draw_color(*ALKIRA_BORDER)
-        pdf.set_line_width(0.2)
-        pdf.set_fill_color(*ALKIRA_WHITE)
-        pdf.rect(cx, y, tile_w, tile_h, style="DF")
-
-        # Orange top stripe
+        # Orange top stripe only — no border, no fill
         pdf.set_fill_color(*ALKIRA_ORANGE)
         pdf.rect(cx, y, tile_w, 1.2, style="F")
 
         # Label
-        pdf.set_xy(cx + pad, y + 3)
+        pdf.set_xy(cx + pad, y + 4.5)
         pdf.set_font("Helvetica", "B", 7)
         pdf.set_text_color(*ALKIRA_ORANGE)
         pdf.cell(tile_w - 2 * pad, 3.5, f"ENTRY 0{i+1}")
 
         # Heading
-        pdf.set_xy(cx + pad, y + 7.5)
+        pdf.set_xy(cx + pad, y + 9)
         pdf.set_font("Helvetica", "B", 10)
         pdf.set_text_color(*ALKIRA_INK)
         heading = _strip_md(point.get("heading", ""))[:80]
