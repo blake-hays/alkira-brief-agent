@@ -177,88 +177,243 @@ class _BriefPDF(FPDF):
         )
 
 
-# ── Hero block ───────────────────────────────────────────────────
+# ── Hero block with score badge ─────────────────────────────────
 
 
-def _draw_hero(pdf: _BriefPDF, company: str, header_pills: str) -> None:
-    """Draw the company-name hero block at top of page 1.
+def _draw_score_pills(
+    pdf: _BriefPDF,
+    score: int,
+    x: float,
+    y: float,
+    pill_w: float = 4.0,
+    pill_h: float = 3.0,
+    gap: float = 1.0,
+) -> float:
+    """Draw 5 small horizontal pills representing the score. Returns total width."""
+    clamped = max(0, min(5, score))
+    for i in range(5):
+        cx = x + i * (pill_w + gap)
+        if i < clamped:
+            pdf.set_fill_color(*ALKIRA_ORANGE)
+        else:
+            pdf.set_fill_color(220, 220, 220)  # light gray
+        pdf.rect(cx, y, pill_w, pill_h, style="F")
+    return 5 * pill_w + 4 * gap
 
-    `header_pills` is the original pipe-delimited line, e.g.
-    'HQ: Irving, TX | Revenue: $309B | Employees: 51K'.
+
+def _draw_hero_with_badge(
+    pdf: _BriefPDF,
+    company: str,
+    header_pills: str,
+    score: int,
+) -> None:
+    """Draw company hero with compact score badge in top-right corner.
+
+    The score badge floats in the top-right; the company name + meta line
+    occupy the left column. Meta text is full-width once it wraps below the
+    badge zone so long pipe-delimited stat lines never collide with the badge.
     """
-    pdf.set_x(12.7)
+    x_left = 12.7
+    page_w = 215.9 - 2 * 12.7  # 190.5mm content width
+    y_start = pdf.get_y()
+    badge_w = 50  # mm
+    badge_h = 12  # approx total badge height (label + number + pills)
+    badge_x = 215.9 - 12.7 - badge_w
+    badge_y = y_start
+
+    # ── Score badge (top-right) ───────────────────────────────
+    pdf.set_xy(badge_x, badge_y)
+    pdf.set_font("Helvetica", "B", 7)
+    pdf.set_text_color(*ALKIRA_BLUE)
+    pdf.cell(badge_w, 3, "ALKIRA FIT")
+
+    pdf.set_xy(badge_x, badge_y + 4)
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.set_text_color(*ALKIRA_INK)
+    pdf.cell(15, 6, f"{score}/5")
+    _draw_score_pills(pdf, score, badge_x + 16, badge_y + 7)
+
+    # ── Company name (left, leaving room for the badge on row 1) ──
+    name_w = badge_x - x_left - 4
+    pdf.set_xy(x_left, y_start)
     pdf.set_font("Helvetica", "B", 22)
     pdf.set_text_color(*ALKIRA_INK)
-    pdf.cell(0, 10, _safe_text(company) or "Untitled Brief", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(
+        name_w, 10,
+        _safe_text(company or "Untitled Brief"),
+        new_x="LMARGIN", new_y="NEXT",
+    )
 
-    pdf.ln(1)
-    pdf.set_x(12.7)
+    # ── Meta pills line ───────────────────────────────────────
+    # Advance below whichever is taller: company name (10mm) or badge (~12mm).
+    pdf.set_y(max(y_start + 10, badge_y + badge_h) + 1)
+    pdf.set_x(x_left)
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(*ALKIRA_MUTED)
-    cleaned = (header_pills or "").replace("**", "").strip()
+    cleaned = _strip_md((header_pills or "").strip())
     if cleaned:
-        pdf.multi_cell(0, 5, _safe_text(_strip_md(cleaned)))
+        # Full width since we are now below the badge
+        pdf.multi_cell(page_w, 5, _safe_text(cleaned))
+    pdf.ln(4)
+
+
+def _draw_fit_summary(pdf: _BriefPDF, summary: str) -> None:
+    """One-sentence fit summary positioned under the hero."""
+    if not summary or not summary.strip():
+        return
+    pdf.set_x(12.7)
+    pdf.set_font("Helvetica", "I", 11)
+    pdf.set_text_color(*ALKIRA_INK)
+    pdf.multi_cell(190.5, 5, _safe_text(_strip_md(summary)))
     pdf.ln(3)
 
 
-# ── Score tile ──────────────────────────────────────────────────
-
-
-def _draw_score_tile(
-    pdf: _BriefPDF,
-    score: int,
-    rationale: str,
-    x: float,
-    y: float,
-    w: float,
-    h: float,
-) -> None:
-    """Draw the gradient-blue score tile with big number, stars, and rationale.
-
-    fpdf2 has no gradient primitive — we use a solid Alkira blue fill,
-    which reads as a clean print equivalent of the web gradient.
-
-    Rationale font is 8pt with 3.5mm line height; truncation is calculated
-    from the actual tile height so text never overflows the blue fill.
-    """
-    # Tile background
-    pdf.set_fill_color(*ALKIRA_BLUE)
-    pdf.rect(x, y, w, h, style="F")
-
-    # Label
-    pdf.set_xy(x + 4, y + 4)
+def _draw_stakeholders_line(pdf: _BriefPDF, stakeholders: str) -> None:
+    """Render the stakeholders one-liner with a small label."""
+    if not stakeholders or not stakeholders.strip():
+        return
+    pdf.set_x(12.7)
     pdf.set_font("Helvetica", "B", 8)
-    pdf.set_text_color(*ALKIRA_WHITE)
-    pdf.cell(w - 8, 4, "ALKIRA FIT")
+    pdf.set_text_color(*ALKIRA_BLUE)
+    pdf.cell(0, 4, "STAKEHOLDERS", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_x(12.7)
+    pdf.set_font("Helvetica", "", 10)
+    pdf.set_text_color(*ALKIRA_INK)
+    pdf.multi_cell(190.5, 5, _safe_text(_strip_md(stakeholders)))
+    pdf.ln(3)
 
-    # Big number
-    pdf.set_xy(x + 4, y + 10)
-    pdf.set_font("Helvetica", "B", 36)
-    pdf.cell(w - 8, 14, str(max(1, min(5, score))))
 
-    # Stars (filled + empty) — _safe_text converts ★→* and ☆→-
-    clamped = max(1, min(5, score))
-    filled = "*" * clamped
-    empty = "-" * (5 - clamped)
-    pdf.set_xy(x + 4, y + 26)
-    pdf.set_font("Helvetica", "", 11)
-    pdf.cell(w - 8, 5, filled + empty)
+def _draw_opening_callout(
+    pdf: _BriefPDF,
+    question: str,
+    listening_for: str,
+) -> None:
+    """Highlighted callout box for the recommended opening line.
 
-    # Rationale — truncate aggressively to fit. Tile height h, rationale starts
-    # at y+33, line height 3.5mm at 8pt. Available = (h-36)/3.5 lines.
-    # In a tile ~58mm wide with 4mm padding each side ~= 50mm usable, ~30
-    # chars/line at 8pt Helvetica.
-    available_lines = max(1, int((h - 36) / 3.5))
-    chars_per_line = 30
-    max_chars = available_lines * chars_per_line
-    text = _strip_md((rationale or "").strip())
-    if len(text) > max_chars:
-        text = text[: max_chars - 3].rstrip() + "..."
+    Two-pass render: first measure the actual wrapped line counts with
+    fpdf2's ``dry_run=True, output="LINES"``, then paint the background + stripe to
+    that exact height, then draw the text. This keeps the LISTENING FOR
+    section inside the tinted box regardless of question length.
+    """
+    x = 12.7
+    y_top = pdf.get_y()
+    w = 190.5
+    pad = 5.0
+    stripe_w = 2.5
+    inner_w = w - stripe_w - 2 * pad
 
-    pdf.set_xy(x + 4, y + 33)
-    pdf.set_font("Helvetica", "", 8)
-    pdf.set_text_color(*ALKIRA_WHITE)
-    pdf.multi_cell(w - 8, 3.5, _safe_text(text))
+    q_text = _safe_text(_strip_md(question or ""))
+    lf_text = _safe_text(_strip_md(listening_for or ""))
+
+    # ── Measure (split-only) ────────────────────────────────────
+    pdf.set_font("Helvetica", "B", 11)
+    q_lines = max(1, len(pdf.multi_cell(inner_w, 5, q_text, dry_run=True, output="LINES")))
+
+    lf_lines = 0
+    if lf_text:
+        pdf.set_font("Helvetica", "", 9)
+        lf_lines = max(1, len(pdf.multi_cell(inner_w, 4, lf_text, dry_run=True, output="LINES")))
+
+    # Compose height: pad + OPENING(4) + 1 + (q_lines * 5) + (1 + 3.5 + lf_lines*4 if lf) + pad
+    box_h = pad + 4 + 1 + (q_lines * 5)
+    if lf_text:
+        box_h += 1 + 3.5 + (lf_lines * 4)
+    box_h += pad
+
+    # ── Backgrounds ────────────────────────────────────────────
+    pdf.set_fill_color(245, 248, 255)  # light blue tint
+    pdf.rect(x, y_top, w, box_h, style="F")
+
+    pdf.set_fill_color(*ALKIRA_ORANGE)
+    pdf.rect(x, y_top, stripe_w, box_h, style="F")
+
+    # ── Text ───────────────────────────────────────────────────
+    pdf.set_xy(x + stripe_w + pad, y_top + pad)
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_text_color(*ALKIRA_ORANGE)
+    pdf.cell(inner_w, 4, "OPENING LINE", new_x="LMARGIN", new_y="NEXT")
+
+    pdf.set_xy(x + stripe_w + pad, y_top + pad + 5)
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.set_text_color(*ALKIRA_INK)
+    pdf.multi_cell(inner_w, 5, q_text)
+
+    if lf_text:
+        pdf.ln(1)
+        pdf.set_x(x + stripe_w + pad)
+        pdf.set_font("Helvetica", "B", 7)
+        pdf.set_text_color(*ALKIRA_BLUE)
+        pdf.cell(inner_w, 3.5, "LISTENING FOR", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_x(x + stripe_w + pad)
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(*ALKIRA_INK)
+        pdf.multi_cell(inner_w, 4, lf_text)
+
+    # Advance past the box (use measured height — not cursor position, since
+    # the cursor lands inside the box at end of text)
+    pdf.set_y(y_top + box_h + 3)
+
+
+def _draw_followup_questions(pdf: _BriefPDF, questions: list[dict]) -> None:
+    """Render the remaining (non-opener) questions as a compact list."""
+    if not questions:
+        return
+    pdf.set_x(12.7)
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_text_color(*ALKIRA_BLUE)
+    pdf.cell(0, 4, "FOLLOW-UP QUESTIONS", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(1)
+
+    for q in questions:
+        pdf.set_x(12.7)
+        # Question number + text
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.set_text_color(*ALKIRA_INK)
+        question_text = f"{q.get('number', '?')}. {_strip_md(q.get('question', ''))}"
+        pdf.multi_cell(190.5, 5, _safe_text(question_text))
+
+        listening = (q.get("listening_for") or "").strip()
+        if listening:
+            pdf.set_x(16)
+            pdf.set_font("Helvetica", "I", 9)
+            pdf.set_text_color(*ALKIRA_MUTED)
+            pdf.multi_cell(186, 4, _safe_text("Listening for: " + _strip_md(listening)))
+        pdf.ln(1.5)
+
+
+def _draw_validate_early(pdf: _BriefPDF, bullets: list[str]) -> None:
+    """Render Validate Early bullets."""
+    if not bullets:
+        return
+    pdf.set_x(12.7)
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_text_color(*ALKIRA_BLUE)
+    pdf.cell(0, 4, "VALIDATE EARLY", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(0.5)
+
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(*ALKIRA_INK)
+    for b in bullets:
+        pdf.set_x(15)
+        pdf.cell(3, 4, "-")
+        pdf.multi_cell(180, 4, _safe_text(_strip_md(b)))
+    pdf.ln(2)
+
+
+def _draw_infra_grid_fullwidth(pdf: _BriefPDF, cells: dict) -> None:
+    """Full-content-width 2x2 infrastructure grid (no score tile alongside)."""
+    pdf.set_x(12.7)
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_text_color(*ALKIRA_BLUE)
+    pdf.cell(0, 4, "INFRASTRUCTURE SNAPSHOT", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(1)
+
+    x = 12.7
+    y = pdf.get_y()
+    w = 190.5
+    h = 70  # taller since full width
+    _draw_infra_grid(pdf, cells, x, y, w, h)
+    pdf.set_y(y + h + 4)
 
 
 # ── Infrastructure 2x2 grid ─────────────────────────────────────
@@ -355,7 +510,12 @@ def _draw_signals(pdf: _BriefPDF, signals_md: str) -> None:
 
 
 def _draw_references(pdf: _BriefPDF, refs_md: str) -> None:
-    """Draw the References tile at the end of the brief."""
+    """Draw the References tile at the end of the brief.
+
+    Left-aligned (not justified) so URLs and citation numbers don't get
+    stretched. Drops any stray ``*CONFIDENTIAL*`` footer line that some
+    briefs append below their references.
+    """
     if not refs_md.strip():
         return
 
@@ -372,12 +532,15 @@ def _draw_references(pdf: _BriefPDF, refs_md: str) -> None:
         line = raw.strip()
         if not line:
             continue
+        # Skip the stray "*CONFIDENTIAL*" footer some briefs include
+        if re.sub(r"[\*\s]", "", line).upper() == "CONFIDENTIAL":
+            continue
         line = _strip_md(line)
         if not line:
             continue
         # Lines look like "[1] Description -- https://..."
         pdf.set_x(12.7)
-        pdf.multi_cell(0, 4, _safe_text(line))
+        pdf.multi_cell(0, 4, _safe_text(line), align="L")
 
 
 # ── Three Alkira Entry Points (3-column row) ────────────────────
@@ -389,11 +552,12 @@ def _draw_entry_points(pdf: _BriefPDF, points: list[dict]) -> None:
     Body text is rendered as a single combined paragraph rather than
     Signal/Solution/Proof sub-labels. This is more reliable across brief
     formats — if labeled fields are empty we fall back to the raw body.
+
+    The caller is responsible for starting a new page if desired; this
+    helper renders inline at the current y-cursor.
     """
     if not points:
         return
-
-    pdf.add_page()  # entry points start a fresh page for clean layout
 
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_text_color(*ALKIRA_BLUE)
@@ -473,83 +637,8 @@ def _draw_entry_points(pdf: _BriefPDF, points: list[dict]) -> None:
     pdf.set_y(y + tile_h + 4)
 
 
-# ── Conversation Starters tile ──────────────────────────────────
+# ── Public API ──────────────────────────────────────────────────
 
-
-def _draw_conversation_starters(pdf: _BriefPDF, starters_md: str) -> None:
-    """Draw the dark-navy Conversation Starters tile.
-
-    Rather than a fixed-height tile that drops content, we pre-measure the
-    cleaned line list, size the navy fill to that, and only fall back to a
-    "[continued in full brief]" hint when remaining page space won't fit it.
-    """
-    if not starters_md.strip():
-        return
-
-    x = 12.7
-    w = 190.5
-    pad = 5.0
-
-    # Clean lines up-front (strip markdown, normalize bullets) so we can
-    # size the tile to the real content count, not the raw markdown.
-    lines: list[str] = []
-    for raw in starters_md.splitlines():
-        line = raw.strip()
-        if not line:
-            continue
-        line = re.sub(r"^[-*]\s+", "- ", line)  # normalize bullets to ASCII
-        line = _strip_md(line)
-        if line:
-            lines.append(line)
-
-    if not lines:
-        return
-
-    # Estimate required height: 4mm label + 6mm gap + ~4.5mm per visual line.
-    # Long lines wrap — approx 95 chars/line at 9pt Helvetica in (w - 10mm) tile.
-    chars_per_visual_line = 95
-    visual_lines = sum(max(1, (len(ln) + chars_per_visual_line - 1) // chars_per_visual_line) for ln in lines)
-    estimated_h = 10 + visual_lines * 4.5 + 4  # +4mm padding tail
-
-    # Cap at remaining page space so we don't overflow into the footer
-    page_remaining = pdf.h - pdf.get_y() - 30  # 30mm = footer + bottom margin
-    actual_h = min(estimated_h, max(40, page_remaining))
-
-    y = pdf.get_y()
-
-    # Navy fill sized to actual content height
-    pdf.set_fill_color(*ALKIRA_NAVY)
-    pdf.rect(x, y, w, actual_h, style="F")
-
-    # Label
-    pdf.set_xy(x + pad, y + pad)
-    pdf.set_font("Helvetica", "B", 8)
-    pdf.set_text_color(*ALKIRA_ORANGE)
-    pdf.cell(0, 4, "CONVERSATION STARTERS", new_x="LMARGIN", new_y="NEXT")
-
-    # Body lines
-    cy = y + pad + 6
-    line_height = 4.0
-
-    for line in lines:
-        if cy > y + actual_h - 6:
-            # Out of room — append a hint that content continues
-            pdf.set_xy(x + pad, y + actual_h - 5)
-            pdf.set_font("Helvetica", "", 8)
-            pdf.set_text_color(*ALKIRA_ORANGE)
-            pdf.cell(0, 3, "[continued in full brief]")
-            break
-
-        pdf.set_xy(x + pad, cy)
-        pdf.set_font("Helvetica", "", 9)
-        pdf.set_text_color(*ALKIRA_WHITE)
-        pdf.multi_cell(w - 2 * pad, line_height, _safe_text(line))
-        cy = pdf.get_y() + 0.5
-
-    pdf.set_y(y + actual_h + 4)
-
-
-# ── Public API (placeholder body — fleshed out in later tasks) ──
 
 def generate_brief_pdf(
     brief_md: str,
@@ -557,57 +646,83 @@ def generate_brief_pdf(
     score: int,
     generated_at: datetime | None = None,
 ) -> bytes:
-    """Render brief markdown as a print-optimized PDF. Returns PDF bytes."""
+    """Render brief markdown as a print-optimized PDF for sales reps.
+
+    Page ordering is action-first: Page 1 surfaces the actionable
+    Conversation Starters content (opening line callout + follow-up
+    questions + Validate Early bullets). Page 2 covers the three Alkira
+    entry points and Signals & Timing. Page 3 (only if content) is the
+    Infrastructure Snapshot + References appendix.
+    """
     when = generated_at or datetime.now()
     pdf = _BriefPDF(generated_at=when)
+
+    # Lazy imports avoid circular dependency with app.py
+    from app import (
+        extract_company_header,
+        extract_conversation_starters_structured,
+        extract_entry_points,
+        extract_infra_cells,
+        extract_score,
+        extract_section,
+        first_sentences,
+    )
+
+    # ── Page 1 — Action (questions + opening callout) ───────────
     pdf.add_page()
 
-    # Parse header (uses app.py parsers — imported lazily to avoid circular deps)
-    from app import extract_company_header
     company_name, stats_line = extract_company_header(brief_md)
     if not company_name:
         company_name = company
 
-    _draw_hero(pdf, company_name, stats_line)
-
-    # Parse score + rationale
-    from app import extract_score
     parsed_score, rationale = extract_score(brief_md)
     if not parsed_score:
         parsed_score = score
 
-    # Layout constants (page is 215.9mm wide, 12.7mm margins → 190.5mm content)
-    content_w = 190.5
-    score_w = content_w * 0.34
-    score_h = 95  # was 60 — gives both the score rationale AND infra cells room to breathe
-    score_x = 12.7
-    score_y = pdf.get_y()
+    _draw_hero_with_badge(pdf, company_name, stats_line, parsed_score)
 
-    _draw_score_tile(pdf, parsed_score, rationale, score_x, score_y, score_w, score_h)
+    summary = first_sentences(rationale, max_chars=200)
+    _draw_fit_summary(pdf, summary)
 
-    # Infrastructure grid (right of score tile, same height)
-    from app import extract_infra_cells
-    infra_w = content_w - score_w - 4
-    infra_x = score_x + score_w + 4
-    cells = extract_infra_cells(brief_md)
-    _draw_infra_grid(pdf, cells, infra_x, score_y, infra_w, score_h)
+    starters_data = extract_conversation_starters_structured(brief_md)
+    _draw_stakeholders_line(pdf, starters_data["stakeholders"])
 
-    # Move below the score+infra row
-    pdf.set_y(score_y + score_h + 4)
+    questions = starters_data["questions"]
+    best_idx = starters_data["best_first_index"]
+    if questions:
+        best_q = next(
+            (q for q in questions if q["number"] == best_idx),
+            questions[0],
+        )
+        _draw_opening_callout(
+            pdf,
+            best_q.get("question", ""),
+            best_q.get("listening_for", ""),
+        )
+        remaining = [q for q in questions if q["number"] != best_q["number"]]
+        _draw_followup_questions(pdf, remaining)
 
-    # Signals & Timing tile (full width)
-    from app import extract_section
-    signals = extract_section(brief_md, "Signals & Timing") or extract_section(brief_md, "Signals and Timing")
-    _draw_signals(pdf, signals)
+    _draw_validate_early(pdf, starters_data["validate_early"])
 
-    from app import extract_entry_points
+    # ── Page 2 — Why (entry points + signals) ────────────────────
+    pdf.add_page()
+
     points = extract_entry_points(brief_md)
     _draw_entry_points(pdf, points)
 
-    starters = extract_section(brief_md, "Conversation Starters")
-    _draw_conversation_starters(pdf, starters)
+    signals = (
+        extract_section(brief_md, "Signals & Timing")
+        or extract_section(brief_md, "Signals and Timing")
+    )
+    _draw_signals(pdf, signals)
 
+    # ── Page 3 — Appendix (infra + references) ───────────────────
+    cells = extract_infra_cells(brief_md)
     refs = extract_section(brief_md, "References")
-    _draw_references(pdf, refs)
+    if any(cells.values()) or refs.strip():
+        pdf.add_page()
+        if any(cells.values()):
+            _draw_infra_grid_fullwidth(pdf, cells)
+        _draw_references(pdf, refs)
 
     return bytes(pdf.output())

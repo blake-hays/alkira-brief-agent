@@ -329,6 +329,113 @@ def extract_infra_cells(brief: str) -> InfraCells:
     return out
 
 
+class ConversationStarters(TypedDict):
+    stakeholders: str          # one-line comma-separated list
+    best_first_hint: str       # the "Lead with question #N because..." sentence
+    best_first_index: int      # 1-5 (which question is the opener)
+    questions: list[dict]      # [{number: int, question: str, listening_for: str}, ...]
+    validate_early: list[str]  # bullet list
+
+
+def extract_conversation_starters_structured(brief: str) -> ConversationStarters:
+    """Parse the Conversation Starters section into structured fields.
+
+    Returns empty fields for any part not present.
+    """
+    section = extract_section(brief, "Conversation Starters")
+    out: ConversationStarters = {
+        "stakeholders": "",
+        "best_first_hint": "",
+        "best_first_index": 1,
+        "questions": [],
+        "validate_early": [],
+    }
+    if not section:
+        return out
+
+    # Stakeholders line
+    m = re.search(
+        r"\*\*Stakeholders:\*\*\s*(.+?)(?=\n\s*\n|\n\s*\*\*|\Z)",
+        section,
+        re.DOTALL,
+    )
+    if m:
+        out["stakeholders"] = m.group(1).strip()
+
+    # Best First Question hint
+    m = re.search(
+        r"\*\*Best First Question:\*\*\s*(.+?)(?=\n\s*\n|\n\s*\d+\.|\Z)",
+        section,
+        re.DOTALL,
+    )
+    if m:
+        hint = m.group(1).strip()
+        out["best_first_hint"] = hint
+        # Try to extract the index of the recommended question
+        n = re.search(r"question\s+#?(\d+)", hint, re.IGNORECASE)
+        if n:
+            out["best_first_index"] = int(n.group(1))
+
+    # Numbered questions with parenthetical listening-for hints
+    # Pattern: digit + dot + space + "question text" + optional italic parenthetical
+    q_pattern = re.compile(
+        r"^(\d+)\.\s+(.+?)(?=\n\s*\*\(|\n\s*\d+\.|\n\s*\*\*|\Z)"
+        r"(?:\n\s*\*\((.+?)\)\*)?",
+        re.MULTILINE | re.DOTALL,
+    )
+    for match in q_pattern.finditer(section):
+        n = int(match.group(1))
+        question = match.group(2).strip()
+        listening_for_raw = (match.group(3) or "").strip()
+        # Strip "You're listening for:" or "Listening for:" prefix
+        listening_for = re.sub(
+            r"^(?:You\'?re\s+)?[Ll]istening\s+for:?\s*",
+            "",
+            listening_for_raw,
+        ).strip()
+        out["questions"].append({
+            "number": n,
+            "question": question,
+            "listening_for": listening_for,
+        })
+
+    # Validate Early bullets
+    m = re.search(
+        r"\*\*Validate\s+[Ee]arly:?\*\*\s*\n(.+?)(?=\n\s*\n|\n\s*\*\*|\Z)",
+        section,
+        re.DOTALL,
+    )
+    if m:
+        bullets_raw = m.group(1)
+        for line in bullets_raw.splitlines():
+            line = line.strip()
+            if line.startswith("-") or line.startswith("*"):
+                line = re.sub(r"^[-*]\s+", "", line)
+                if line:
+                    out["validate_early"].append(line)
+
+    return out
+
+
+def first_sentences(text: str, max_chars: int = 200) -> str:
+    """Return the first 1-2 sentences of text, capped at max_chars.
+
+    Used for the compact score summary on the new PDF layout.
+    """
+    if not text:
+        return ""
+    text = text.strip()
+    # Find sentence boundaries (.!?) followed by whitespace + uppercase
+    sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z])", text)
+    out = ""
+    for s in sentences:
+        candidate = (out + " " + s).strip() if out else s
+        if len(candidate) > max_chars:
+            return out or s[:max_chars - 3].rstrip() + "..."
+        out = candidate
+    return out
+
+
 def extract_exec_snippet(brief_md: str, max_chars: int = 120) -> str:
     """Pull a preview snippet from the score reasoning or first section."""
     # Try score reasoning first (it's the new exec summary)

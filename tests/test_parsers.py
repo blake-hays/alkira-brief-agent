@@ -1,6 +1,11 @@
 """Tests for brief markdown parsers."""
 
-from app import extract_entry_points, extract_infra_cells
+from app import (
+    extract_conversation_starters_structured,
+    extract_entry_points,
+    extract_infra_cells,
+    first_sentences,
+)
 
 SAMPLE_BRIEF = """
 ## Three Alkira Entry Points
@@ -272,3 +277,107 @@ def test_extract_infra_cells_label_variants():
     assert "Modest" in cells["complexity"]
     for v in cells.values():
         assert "**" not in v
+
+
+STARTERS_BRIEF = """
+## Conversation Starters
+
+**Stakeholders:** CIO / VP IT, VP Corporate Development, CFO
+
+**Best First Question:** Lead with question #2 because it shows you know the situation.
+
+1. "First question text here?"
+*(You're listening for: clue one and clue two.)*
+
+2. "Second question - the opener?"
+*(You're listening for: opening clue here.)*
+
+3. "Third question text?"
+*(You're listening for: third clue.)*
+
+**Validate Early:**
+- Confirm thing one
+- Identify thing two
+"""
+
+
+def test_extract_conversation_starters_returns_all_fields():
+    out = extract_conversation_starters_structured(STARTERS_BRIEF)
+    assert "CIO / VP IT" in out["stakeholders"]
+    assert out["best_first_index"] == 2
+    assert "Lead with question" in out["best_first_hint"]
+    assert len(out["questions"]) == 3
+    assert out["validate_early"] == ["Confirm thing one", "Identify thing two"]
+
+
+def test_extract_conversation_starters_questions_parsed():
+    out = extract_conversation_starters_structured(STARTERS_BRIEF)
+    qs = out["questions"]
+    assert qs[0]["number"] == 1
+    assert "First question" in qs[0]["question"]
+    assert qs[0]["listening_for"].startswith("clue one")
+    assert qs[1]["number"] == 2
+    assert qs[1]["listening_for"].startswith("opening clue")
+
+
+def test_extract_conversation_starters_missing_section():
+    out = extract_conversation_starters_structured("# Just a title")
+    assert out["stakeholders"] == ""
+    assert out["best_first_hint"] == ""
+    assert out["best_first_index"] == 1
+    assert out["questions"] == []
+    assert out["validate_early"] == []
+
+
+def test_extract_conversation_starters_no_listening_for():
+    brief = """
+## Conversation Starters
+
+**Stakeholders:** CIO
+
+1. "Naked question, no parenthetical."
+
+2. "Another one."
+
+**Validate Early:**
+- Bullet
+"""
+    out = extract_conversation_starters_structured(brief)
+    assert len(out["questions"]) == 2
+    assert out["questions"][0]["listening_for"] == ""
+
+
+def test_extract_conversation_starters_strips_listening_for_prefix():
+    """Both 'You're listening for:' and 'Listening for:' prefixes are stripped."""
+    brief = """
+## Conversation Starters
+
+1. "Q1?"
+*(You're listening for: real content one.)*
+
+2. "Q2?"
+*(Listening for: real content two.)*
+"""
+    out = extract_conversation_starters_structured(brief)
+    assert out["questions"][0]["listening_for"] == "real content one."
+    assert out["questions"][1]["listening_for"] == "real content two."
+
+
+def test_first_sentences_caps_at_one_when_long():
+    text = "This is a fairly long single sentence that already exceeds the limit set." \
+        " Second sentence here that won't fit."
+    out = first_sentences(text, max_chars=80)
+    assert out.endswith(".")
+    assert len(out) <= 80
+    assert "Second sentence" not in out
+
+
+def test_first_sentences_returns_two_when_room():
+    text = "First. Second. Third."
+    out = first_sentences(text, max_chars=200)
+    assert "First." in out and "Third." in out
+
+
+def test_first_sentences_empty():
+    assert first_sentences("") == ""
+    assert first_sentences("   ") == ""
