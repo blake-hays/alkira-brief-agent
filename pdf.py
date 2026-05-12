@@ -13,7 +13,7 @@ from fpdf import FPDF
 
 # Bump this when changing PDF rendering. Streamlit's session-state cache
 # uses it as part of the cache key so a code update invalidates stale PDFs.
-PDF_VERSION = "v3"
+PDF_VERSION = "v4"
 
 # ── Brand palette (RGB tuples for fpdf2) ─────────────────────────
 ALKIRA_BLUE   = (45, 88, 242)    # #2D58F2
@@ -211,53 +211,53 @@ def _draw_hero_with_badge(
     header_pills: str,
     score: int,
 ) -> None:
-    """Draw company hero with compact score badge in top-right corner.
+    """Draw company hero with a compact score eyebrow above the company name.
 
-    The score badge floats in the top-right; the company name + meta line
-    occupy the left column. Meta text is full-width once it wraps below the
-    badge zone so long pipe-delimited stat lines never collide with the badge.
+    Layout (top to bottom):
+        Row 1: ``ALKIRA FIT  4/5  ██░`` eyebrow, right-aligned
+        Row 2: Company name, full width, no horizontal collision risk
+        Row 3: Meta pills line, full width
     """
     x_left = 12.7
     page_w = 215.9 - 2 * 12.7  # 190.5mm content width
     y_start = pdf.get_y()
-    badge_w = 50  # mm
-    badge_h = 12  # approx total badge height (label + number + pills)
-    badge_x = 215.9 - 12.7 - badge_w
-    badge_y = y_start
 
-    # ── Score badge (top-right) ───────────────────────────────
-    pdf.set_xy(badge_x, badge_y)
+    # ── Row 1: Score eyebrow (small, right-aligned) ───────────
+    # Total eyebrow width: "ALKIRA FIT" label + "4/5" + pills
+    pill_block_w = 5 * 4 + 4 * 1  # 5 pills × 4mm + 4 gaps × 1mm = 24mm
+    eyebrow_y = y_start
+    pills_x = 215.9 - 12.7 - pill_block_w
+    score_x = pills_x - 12  # space for "4/5"
+    label_x = score_x - 22  # space for "ALKIRA FIT"
+
+    pdf.set_xy(label_x, eyebrow_y)
     pdf.set_font("Helvetica", "B", 7)
     pdf.set_text_color(*ALKIRA_BLUE)
-    pdf.cell(badge_w, 3, "ALKIRA FIT")
+    pdf.cell(20, 4, "ALKIRA FIT", align="R")
 
-    pdf.set_xy(badge_x, badge_y + 4)
-    pdf.set_font("Helvetica", "B", 16)
+    pdf.set_xy(score_x, eyebrow_y - 0.5)
+    pdf.set_font("Helvetica", "B", 11)
     pdf.set_text_color(*ALKIRA_INK)
-    pdf.cell(15, 6, f"{score}/5")
-    _draw_score_pills(pdf, score, badge_x + 16, badge_y + 7)
+    pdf.cell(10, 4, f"{score}/5", align="R")
 
-    # ── Company name (left, leaving room for the badge on row 1) ──
-    name_w = badge_x - x_left - 4
-    pdf.set_xy(x_left, y_start)
-    pdf.set_font("Helvetica", "B", 26)
+    _draw_score_pills(pdf, score, pills_x, eyebrow_y + 0.5)
+
+    # ── Row 2: Company name, full width ───────────────────────
+    pdf.set_xy(x_left, y_start + 6)
+    pdf.set_font("Helvetica", "B", 24)
     pdf.set_text_color(*ALKIRA_INK)
-    pdf.cell(
-        name_w, 10,
+    pdf.multi_cell(
+        page_w, 9,
         _safe_text(company or "Untitled Brief"),
-        new_x="LMARGIN", new_y="NEXT",
     )
 
-    # ── Meta pills line ───────────────────────────────────────
-    # Advance below whichever is taller: company name (10mm) or badge (~12mm).
-    pdf.set_y(max(y_start + 10, badge_y + badge_h) + 1)
+    # ── Row 3: Meta pills line ────────────────────────────────
     pdf.set_x(x_left)
     pdf.set_font("Helvetica", "", 10)
     pdf.set_text_color(*ALKIRA_MUTED)
     cleaned = _strip_md((header_pills or "").strip())
     if cleaned:
-        # Full width since we are now below the badge
-        pdf.multi_cell(page_w, 5, _safe_text(cleaned))
+        pdf.multi_cell(page_w, 4.5, _safe_text(cleaned))
     pdf.ln(4)
 
 
@@ -676,9 +676,6 @@ def generate_brief_pdf(
 
     _draw_hero_with_badge(pdf, company_name, stats_line, parsed_score)
 
-    summary = first_sentences(rationale, max_chars=200)
-    _draw_fit_summary(pdf, summary)
-
     starters_data = extract_conversation_starters_structured(brief_md)
     _draw_stakeholders_line(pdf, starters_data["stakeholders"])
 
@@ -699,9 +696,7 @@ def generate_brief_pdf(
 
     _draw_validate_early(pdf, starters_data["validate_early"])
 
-    # ── Page 2 — Why (entry points + signals) ────────────────────
-    pdf.add_page()
-
+    # ── Why (entry points + signals) — flows naturally, no forced page break ──
     points = extract_entry_points(brief_md)
     _draw_entry_points(pdf, points)
 
@@ -711,13 +706,12 @@ def generate_brief_pdf(
     )
     _draw_signals(pdf, signals)
 
-    # ── Page 3 — Appendix (infra + references) ───────────────────
+    # ── Appendix (infra + references) — flows naturally ──
     cells = extract_infra_cells(brief_md)
     refs = extract_section(brief_md, "References")
-    if any(cells.values()) or refs.strip():
-        pdf.add_page()
-        if any(cells.values()):
-            _draw_infra_grid_fullwidth(pdf, cells)
+    if any(cells.values()):
+        _draw_infra_grid_fullwidth(pdf, cells)
+    if refs.strip():
         _draw_references(pdf, refs)
 
     return bytes(pdf.output())
