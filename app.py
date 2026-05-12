@@ -340,9 +340,15 @@ class ConversationStarters(TypedDict):
 def extract_conversation_starters_structured(brief: str) -> ConversationStarters:
     """Parse the Conversation Starters section into structured fields.
 
+    Tolerant of common format variations:
+    - Section header: "Conversation Starters" / "Discovery Questions" / "Sales Questions"
+    - Bold variations: ``**X**:`` / ``**X:**`` / ``X:``
+    - Question prefixes: ``**Best First Question:**`` / ``**Lead Question:**`` / ``**Opening Question:**``
+    - Listening-for prefix variations and italic/parenthetical wrappers
+    - Validate Early bullets with case + bold variations
+
     Returns empty fields for any part not present.
     """
-    section = extract_section(brief, "Conversation Starters")
     out: ConversationStarters = {
         "stakeholders": "",
         "best_first_hint": "",
@@ -350,58 +356,83 @@ def extract_conversation_starters_structured(brief: str) -> ConversationStarters
         "questions": [],
         "validate_early": [],
     }
+
+    # Try multiple section header variants
+    section = ""
+    for header in (
+        "Conversation Starters",
+        "Discovery Questions",
+        "Sales Questions",
+        "Questions to Ask",
+        "Questions",
+    ):
+        section = extract_section(brief, header)
+        if section:
+            break
     if not section:
         return out
 
-    # Stakeholders line
+    # Stakeholders — tolerant of bold variations and "Key Stakeholders" prefix
     m = re.search(
-        r"\*\*Stakeholders:\*\*\s*(.+?)(?=\n\s*\n|\n\s*\*\*|\Z)",
+        r"\*{0,2}(?:Key\s+)?Stakeholders\*{0,2}\s*:\s*\*{0,2}\s*(.+?)"
+        r"(?=\n\s*\n|\n\s*\*{0,2}(?:Best|Lead|Opening|Validate)|\n\s*\d+\.|\Z)",
         section,
-        re.DOTALL,
+        re.DOTALL | re.IGNORECASE,
     )
     if m:
-        out["stakeholders"] = m.group(1).strip()
+        out["stakeholders"] = m.group(1).strip().rstrip("*").strip()
 
-    # Best First Question hint
+    # Best/Lead/Opening Question hint — tolerant of bold variations
     m = re.search(
-        r"\*\*Best First Question:\*\*\s*(.+?)(?=\n\s*\n|\n\s*\d+\.|\Z)",
+        r"\*{0,2}(?:Best\s+First|Lead|Opening)\s+Question\*{0,2}\s*:\s*\*{0,2}\s*(.+?)"
+        r"(?=\n\s*\n|\n\s*\d+\.|\n\s*\*{0,2}[A-Z]|\Z)",
         section,
-        re.DOTALL,
+        re.DOTALL | re.IGNORECASE,
     )
     if m:
-        hint = m.group(1).strip()
+        hint = m.group(1).strip().rstrip("*").strip()
         out["best_first_hint"] = hint
         # Try to extract the index of the recommended question
-        n = re.search(r"question\s+#?(\d+)", hint, re.IGNORECASE)
+        n = re.search(r"question\s*#?(\d+)", hint, re.IGNORECASE)
         if n:
             out["best_first_index"] = int(n.group(1))
 
-    # Numbered questions with parenthetical listening-for hints
-    # Pattern: digit + dot + space + "question text" + optional italic parenthetical
+    # Numbered questions — tolerant of quotes (optional), italic listening-for (optional)
+    # Match: digit + dot + space + question text (with or without quotes),
+    # optionally followed by italic/parenthetical listening-for line.
     q_pattern = re.compile(
-        r"^(\d+)\.\s+(.+?)(?=\n\s*\*\(|\n\s*\d+\.|\n\s*\*\*|\Z)"
-        r"(?:\n\s*\*\((.+?)\)\*)?",
+        r"^\s*(\d+)\.\s+\"?(.+?)\"?\s*"
+        r"(?:\n\s*\*?\(?\s*((?:You\'?re\s+)?[Ll]isten(?:ing)?\s+for[^)]*?)\)?\*?\s*)?"
+        r"(?=\n\s*\d+\.|\n\s*\*{0,2}(?:Validate|Best|Lead|Opening|Stakeholders)|\n\s*\n\s*\*\*|\Z)",
         re.MULTILINE | re.DOTALL,
     )
     for match in q_pattern.finditer(section):
         n = int(match.group(1))
-        question = match.group(2).strip()
-        listening_for_raw = (match.group(3) or "").strip()
-        # Strip "You're listening for:" or "Listening for:" prefix
-        listening_for = re.sub(
-            r"^(?:You\'?re\s+)?[Ll]istening\s+for:?\s*",
+        q_text = match.group(2).strip()
+        # Strip trailing quote/whitespace artifacts
+        q_text = q_text.rstrip('"').strip()
+        # Drop any trailing italic/parenthetical that got absorbed into question text
+        # (defensive in case of unusual line breaks)
+        q_text = re.sub(r"\s*\*?\(?\s*(?:You\'?re\s+)?[Ll]isten(?:ing)?\s+for.*$", "", q_text, flags=re.DOTALL).strip()
+
+        lf_raw = (match.group(3) or "").strip()
+        # Strip "You're listening for:" / "Listening for:" / "Listen for:" prefix
+        # plus any leading parenthesis/asterisk and trailing quote/parenthesis/asterisk
+        lf = re.sub(
+            r"^\*?\(?\s*(?:You\'?re\s+)?[Ll]isten(?:ing)?\s+for\s*:?\s*",
             "",
-            listening_for_raw,
-        ).strip()
+            lf_raw,
+        ).strip().rstrip(")").rstrip("*").strip()
         out["questions"].append({
             "number": n,
-            "question": question,
-            "listening_for": listening_for,
+            "question": q_text,
+            "listening_for": lf,
         })
 
-    # Validate Early bullets
+    # Validate Early bullets — tolerant of bold/case variations
     m = re.search(
-        r"\*\*Validate\s+[Ee]arly:?\*\*\s*\n(.+?)(?=\n\s*\n|\n\s*\*\*|\Z)",
+        r"\*{0,2}Validate\s+[Ee]arly\*{0,2}\s*:?\s*\*{0,2}\s*\n(.+?)"
+        r"(?=\n\s*\*{0,2}[A-Z][a-z]+\s*[:*]|\Z)",
         section,
         re.DOTALL,
     )
@@ -409,10 +440,12 @@ def extract_conversation_starters_structured(brief: str) -> ConversationStarters
         bullets_raw = m.group(1)
         for line in bullets_raw.splitlines():
             line = line.strip()
-            if line.startswith("-") or line.startswith("*"):
-                line = re.sub(r"^[-*]\s+", "", line)
-                if line:
-                    out["validate_early"].append(line)
+            line = re.sub(r"^[-*•]\s+", "", line)
+            if line and not line.startswith("**") and not re.match(r"^[A-Z][a-z]+\s*:", line):
+                # Strip basic markdown
+                line = re.sub(r"\*\*(.+?)\*\*", r"\1", line)
+                line = re.sub(r"\*([^*\n]+?)\*", r"\1", line)
+                out["validate_early"].append(line)
 
     return out
 

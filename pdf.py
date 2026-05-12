@@ -7,13 +7,14 @@ in a print-optimized form. See docs/superpowers/specs/2026-05-06-bento-brief-pdf
 from __future__ import annotations
 
 import re
+import sys
 from datetime import datetime
 
 from fpdf import FPDF
 
 # Bump this when changing PDF rendering. Streamlit's session-state cache
 # uses it as part of the cache key so a code update invalidates stale PDFs.
-PDF_VERSION = "v4"
+PDF_VERSION = "v5"
 
 # ── Brand palette (RGB tuples for fpdf2) ─────────────────────────
 ALKIRA_BLUE   = (45, 88, 242)    # #2D58F2
@@ -385,79 +386,50 @@ def _draw_validate_early(pdf: _BriefPDF, bullets: list[str]) -> None:
     pdf.ln(2)
 
 
-def _draw_infra_grid_fullwidth(pdf: _BriefPDF, cells: dict) -> None:
-    """Full-content-width 2x2 infrastructure grid (no score tile alongside)."""
+def _draw_infra_list(pdf: _BriefPDF, cells: dict) -> None:
+    """Flow-based infrastructure list. No absolute Y positioning.
+
+    Renders each cell as an inline LABEL + body paragraph, single-column,
+    so the auto page-break works cleanly and labels never get separated
+    from their body content across page boundaries.
+    """
+    if not any(cells.values()):
+        return
+
+    # Section header
     pdf.set_x(12.7)
     pdf.set_font("Helvetica", "B", 8)
     pdf.set_text_color(*ALKIRA_BLUE)
     pdf.cell(0, 4, "INFRASTRUCTURE SNAPSHOT", new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(1)
-
-    x = 12.7
-    y = pdf.get_y()
-    w = 190.5
-    h = 70  # taller since full width
-    _draw_infra_grid(pdf, cells, x, y, w, h)
-    pdf.set_y(y + h + 4)
-
-
-# ── Infrastructure 2x2 grid ─────────────────────────────────────
-
-
-def _draw_infra_grid(
-    pdf: _BriefPDF,
-    cells: dict,
-    x: float,
-    y: float,
-    w: float,
-    h: float,
-) -> None:
-    """2-column typography-led infrastructure list (no cell borders, no fills).
-
-    Renders as 2 columns x 2 rows. Each cell is just a small caps label in
-    Alkira blue + body text in ink. Subtle vertical hairline between columns
-    for visual separation, no horizontal lines.
-    """
-    col_w = w / 2 - 4  # 4mm gutter between columns
-    col_gap = 8
-    col1_x = x
-    col2_x = x + col_w + col_gap
+    pdf.ln(2)
 
     items = [
-        ("CLOUD PLATFORMS", cells.get("cloud_platforms", ""), col1_x, y),
-        ("ON-PREM / HYBRID", cells.get("on_prem", ""), col2_x, y),
-        ("DEPLOYMENT MODEL", cells.get("deployment", ""), col1_x, y + h / 2),
-        ("RESULTING COMPLEXITY", cells.get("complexity", ""), col2_x, y + h / 2),
+        ("CLOUD PLATFORMS", cells.get("cloud_platforms", "")),
+        ("ON-PREM / HYBRID", cells.get("on_prem", "")),
+        ("DEPLOYMENT MODEL", cells.get("deployment", "")),
+        ("RESULTING COMPLEXITY", cells.get("complexity", "")),
     ]
 
-    row_h = h / 2
-    body_h = row_h - 6  # label takes 4-5mm, rest is body
-    available_lines = max(1, int(body_h / 3.6))
-    chars_per_line = 50  # wider than before because each column gets w/2
-    max_chars = available_lines * chars_per_line
+    for label, body in items:
+        body = (body or "").strip()
+        if not body:
+            continue
 
-    for label, body, cx, cy in items:
-        # Label
-        pdf.set_xy(cx, cy)
+        # Inline label
+        pdf.set_x(12.7)
         pdf.set_font("Helvetica", "B", 7)
         pdf.set_text_color(*ALKIRA_BLUE)
-        pdf.cell(col_w, 3.5, label)
+        pdf.cell(0, 3.5, label, new_x="LMARGIN", new_y="NEXT")
 
         # Body
-        text = _strip_md((body or "—").strip())
-        if len(text) > max_chars:
-            text = text[:max_chars - 3].rstrip() + "..."
-
-        pdf.set_xy(cx, cy + 5)
+        pdf.set_x(12.7)
         pdf.set_font("Helvetica", "", 9)
         pdf.set_text_color(*ALKIRA_INK)
-        pdf.multi_cell(col_w, 3.8, _safe_text(text))
-
-    # Subtle vertical hairline between columns (very light gray)
-    mid_x = x + w / 2
-    pdf.set_draw_color(230, 230, 235)
-    pdf.set_line_width(0.15)
-    pdf.line(mid_x, y, mid_x, y + h)
+        body_clean = _strip_md(body)
+        if len(body_clean) > 400:
+            body_clean = body_clean[:397].rstrip() + "..."
+        pdf.multi_cell(190.5, 4, _safe_text(body_clean))
+        pdf.ln(2)
 
 
 # ── Signals & References tiles ──────────────────────────────────
@@ -677,6 +649,13 @@ def generate_brief_pdf(
     _draw_hero_with_badge(pdf, company_name, stats_line, parsed_score)
 
     starters_data = extract_conversation_starters_structured(brief_md)
+    if not starters_data["questions"]:
+        section_chars = len(extract_section(brief_md, "Conversation Starters"))
+        print(
+            f"[pdf] WARNING: No conversation starters parsed for brief. "
+            f"Section length: {section_chars} chars",
+            file=sys.stderr,
+        )
     _draw_stakeholders_line(pdf, starters_data["stakeholders"])
 
     questions = starters_data["questions"]
@@ -710,7 +689,7 @@ def generate_brief_pdf(
     cells = extract_infra_cells(brief_md)
     refs = extract_section(brief_md, "References")
     if any(cells.values()):
-        _draw_infra_grid_fullwidth(pdf, cells)
+        _draw_infra_list(pdf, cells)
     if refs.strip():
         _draw_references(pdf, refs)
 

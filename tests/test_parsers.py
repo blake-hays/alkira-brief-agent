@@ -381,3 +381,63 @@ def test_first_sentences_returns_two_when_room():
 def test_first_sentences_empty():
     assert first_sentences("") == ""
     assert first_sentences("   ") == ""
+
+
+def test_extract_conversation_starters_handles_bold_after_colon():
+    """**Stakeholders**: foo (no bold on stakeholders content) works."""
+    brief = """## Conversation Starters
+
+**Stakeholders**: CIO, CTO, VP Network
+
+**Best First Question**: Lead with question #2 about cloud strategy.
+
+1. "How is your cloud migration going?"
+*(You're listening for: pain.)*
+
+2. "What's your timeline?"
+*(Listening for: urgency.)*
+
+**Validate Early**:
+- Confirm migration phase
+"""
+    out = extract_conversation_starters_structured(brief)
+    assert "CIO" in out["stakeholders"]
+    assert out["best_first_index"] == 2
+    assert len(out["questions"]) == 2
+    assert "cloud migration" in out["questions"][0]["question"]
+    assert "pain" in out["questions"][0]["listening_for"]
+    assert "urgency" in out["questions"][1]["listening_for"]
+    assert len(out["validate_early"]) == 1
+
+
+def test_extract_conversation_starters_alternate_header():
+    """Header named 'Discovery Questions' instead of 'Conversation Starters' works."""
+    brief = """## Discovery Questions
+
+**Stakeholders:** CIO
+
+**Best First Question:** Lead with #1.
+
+1. "Question one?"
+*(Listening for: thing.)*
+"""
+    out = extract_conversation_starters_structured(brief)
+    assert "CIO" in out["stakeholders"]
+    assert len(out["questions"]) == 1
+
+
+def test_extract_conversation_starters_no_quotes_on_questions():
+    """Questions without surrounding quotes parse fine."""
+    brief = """## Conversation Starters
+
+**Stakeholders:** CIO
+
+1. How is the migration going?
+*(Listening for: pain.)*
+
+2. What is your timeline?
+*(Listening for: urgency.)*
+"""
+    out = extract_conversation_starters_structured(brief)
+    assert len(out["questions"]) == 2
+    assert "migration" in out["questions"][0]["question"]
