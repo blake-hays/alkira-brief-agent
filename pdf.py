@@ -13,7 +13,7 @@ from fpdf import FPDF
 
 # Bump this when changing PDF rendering. Streamlit's session-state cache
 # uses it as part of the cache key so a code update invalidates stale PDFs.
-PDF_VERSION = "v2"
+PDF_VERSION = "v3"
 
 # ── Brand palette (RGB tuples for fpdf2) ─────────────────────────
 ALKIRA_BLUE   = (45, 88, 242)    # #2D58F2
@@ -635,16 +635,33 @@ def generate_brief_pdf(
     when = generated_at or datetime.now()
     pdf = _BriefPDF(generated_at=when)
 
-    # Lazy imports avoid circular dependency with app.py
+    # Lazy imports avoid circular dependency with app.py.
+    # Stale Streamlit Cloud deploys can have an older `app` module cached in
+    # sys.modules without the newer helpers — degrade gracefully if missing.
     from app import (
         extract_company_header,
-        extract_conversation_starters_structured,
         extract_entry_points,
         extract_infra_cells,
         extract_score,
         extract_section,
-        first_sentences,
     )
+    try:
+        from app import extract_conversation_starters_structured
+    except ImportError:
+        def extract_conversation_starters_structured(_brief: str) -> dict:
+            return {
+                "stakeholders": "",
+                "best_first_hint": "",
+                "best_first_index": 1,
+                "questions": [],
+                "validate_early": [],
+            }
+    try:
+        from app import first_sentences
+    except ImportError:
+        def first_sentences(text: str, max_chars: int = 200) -> str:
+            text = (text or "").strip()
+            return text if len(text) <= max_chars else text[: max_chars - 3].rstrip() + "..."
 
     # ── Page 1 — Action (questions + opening callout) ───────────
     pdf.add_page()
